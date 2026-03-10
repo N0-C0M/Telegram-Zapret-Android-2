@@ -79,7 +79,7 @@ private:
     ByteArray *tempBuffer = nullptr;
     size_t bytesRead = 0;
     int8_t tlsState = 0;
-    bool zapretTcpDesyncSent = false;
+    int8_t zapretTcpDesyncSendsLeft = 0;
 
     uint8_t proxyAuthState;
 

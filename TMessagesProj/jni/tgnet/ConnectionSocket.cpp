@@ -461,7 +461,7 @@ void ConnectionSocket::openConnection(std::string address, uint16_t port, std::s
     waitingForHostResolve = "";
     adjustWriteOpAfterResolve = false;
     tlsState = 0;
-    zapretTcpDesyncSent = false;
+    zapretTcpDesyncSendsLeft = 3;
     ConnectionsManager::getInstance(instanceNum).attachConnection(this);
 
     memset(&socketAddress, 0, sizeof(sockaddr_in));
@@ -660,7 +660,7 @@ void ConnectionSocket::closeSocket(int32_t reason, int32_t error) {
     adjustWriteOpAfterResolve = false;
     proxyAuthState = 0;
     tlsState = 0;
-    zapretTcpDesyncSent = false;
+    zapretTcpDesyncSendsLeft = 0;
     onConnectedSent = false;
     outgoingByteStream->clean();
     if (tlsBuffer != nullptr) {
@@ -1019,11 +1019,11 @@ void ConnectionSocket::onEvent(uint32_t events) {
 
                         std::memcpy(tempBuffer->bytes + headersSize, buffer->bytes(), remaining);
 
-                        if (!zapretTcpDesyncSent) {
+                        if (zapretTcpDesyncSendsLeft > 0) {
                             zapret::TcpChunkPlan plan = zapret::BuildTcpChunkPlan(false, currentPort, reinterpret_cast<const uint8_t *>(buffer->bytes()), remaining);
                             if (plan.enabled && !plan.chunks.empty()) {
                                 plan.chunks[0] += headersSize;
-                                zapretTcpDesyncSent = true;
+                                zapretTcpDesyncSendsLeft--;
                                 sentLength = sendChunkedZapretPayload(socketFd, reinterpret_cast<const uint8_t *>(tempBuffer->bytes), headersSize + remaining, plan);
                             } else {
                                 sentLength = send(socketFd, tempBuffer->bytes, headersSize + remaining, 0);
@@ -1043,10 +1043,10 @@ void ConnectionSocket::onEvent(uint32_t events) {
                             adjustWriteOp();
                         }
                     } else {
-                        if (!zapretTcpDesyncSent) {
+                        if (zapretTcpDesyncSendsLeft > 0) {
                             zapret::TcpChunkPlan plan = zapret::BuildTcpChunkPlan(false, currentPort, reinterpret_cast<const uint8_t *>(buffer->bytes()), remaining);
                             if (plan.enabled) {
-                                zapretTcpDesyncSent = true;
+                                zapretTcpDesyncSendsLeft--;
                                 sentLength = sendChunkedZapretPayload(socketFd, reinterpret_cast<const uint8_t *>(buffer->bytes()), remaining, plan);
                             } else {
                                 sentLength = send(socketFd, buffer->bytes(), remaining, 0);
