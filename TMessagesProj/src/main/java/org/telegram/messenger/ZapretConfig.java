@@ -396,11 +396,7 @@ public final class ZapretConfig {
         StringBuilder builder = new StringBuilder();
         builder.append(getSelectedStrategySummary());
         builder.append("\n\n");
-        builder.append(LocaleController.getString(R.string.ZapretTelegramOnlyCoverageInfo));
-        builder.append("\n");
         builder.append(LocaleController.getString(R.string.ZapretTelegramOnlyStrategyPackInfo));
-        builder.append("\n\n");
-        builder.append(LocaleController.getString(R.string.ZapretTelegramOnlyLimitInfo));
         return builder.toString();
     }
 
