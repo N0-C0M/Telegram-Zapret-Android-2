@@ -119,6 +119,7 @@ void NetworkSocketPosix::Send(NetworkPacket *packet){
 	if(protocol==PROTO_UDP){
 		sockaddr_in6 addr;
 		IPv4Address *v4addr=dynamic_cast<IPv4Address *>(packet->address);
+		IPv6Address *v6addr=nullptr;
 		if(v4addr){
 			if(needUpdateNat64Prefix && !isV4Available && VoIPController::GetCurrentTime()>switchToV6at && switchToV6at!=0){
 				LOGV("Updating NAT64 prefix");
@@ -166,13 +167,24 @@ void NetworkSocketPosix::Send(NetworkPacket *packet){
 				addr.sin6_addr.s6_addr[11]=addr.sin6_addr.s6_addr[10]=0xFF;
 
 		}else{
-			IPv6Address *v6addr=dynamic_cast<IPv6Address *>(packet->address);
+			v6addr=dynamic_cast<IPv6Address *>(packet->address);
 			assert(v6addr!=NULL);
 			memcpy(addr.sin6_addr.s6_addr, v6addr->GetAddress(), 16);
 			addr.sin6_family=AF_INET6;
 		}
 		addr.sin6_port=htons(packet->port);
-		if(!zapretUdpFakeSent){
+		if(!zapretUdpFakeEndpointAddress || zapretUdpFakeEndpointPort!=packet->port || *zapretUdpFakeEndpointAddress!=*packet->address){
+			zapretUdpFakeEndpointPort=packet->port;
+			zapretUdpFakePacketsLeft=zapret::GetUdpFakeCutoffPackets(true, packet->port);
+			if(v4addr){
+				zapretUdpFakeEndpointAddress=std::unique_ptr<NetworkAddress>(new IPv4Address(*v4addr));
+			}else if(v6addr){
+				zapretUdpFakeEndpointAddress=std::unique_ptr<NetworkAddress>(new IPv6Address(*v6addr));
+			}else{
+				zapretUdpFakeEndpointAddress.reset();
+			}
+		}
+		if(zapretUdpFakePacketsLeft>0){
 			const int repeats=zapret::GetUdpFakeRepeats(true, packet->port);
 			if(repeats>0){
 				uint8_t fakePacket[32];
@@ -182,17 +194,20 @@ void NetworkSocketPosix::Send(NetworkPacket *packet){
 						sendto(fd, fakePacket, fakeLength, 0, (const sockaddr *) &addr, sizeof(addr));
 					}
 				}
-				zapretUdpFakeSent=true;
+				zapretUdpFakePacketsLeft--;
+			}else{
+				zapretUdpFakePacketsLeft=0;
 			}
 		}
 		res=(int)sendto(fd, packet->data, packet->length, 0, (const sockaddr *) &addr, sizeof(addr));
 	}else{
-		if(!zapretTcpDesyncSent && pendingOutgoingPacket==NULL){
+		if(zapretTcpDesyncSendsLeft>0 && pendingOutgoingPacket==NULL){
 			zapret::TcpChunkPlan plan=zapret::BuildTcpChunkPlan(true, tcpConnectedPort, reinterpret_cast<const uint8_t*>(packet->data), packet->length);
 			if(plan.enabled){
-				zapretTcpDesyncSent=true;
+				zapretTcpDesyncSendsLeft--;
 				res=(int)SendChunkedZapret(fd, reinterpret_cast<const uint8_t*>(packet->data), packet->length, plan);
 			}else{
+				zapretTcpDesyncSendsLeft=0;
 				res=(int)send(fd, packet->data, packet->length, 0);
 			}
 		}else{
@@ -293,8 +308,9 @@ void NetworkSocketPosix::Receive(NetworkPacket *packet){
 void NetworkSocketPosix::Open(){
 	if(protocol!=PROTO_UDP)
 		return;
-	zapretUdpFakeSent=false;
-	zapretTcpDesyncSent=false;
+	zapretUdpFakeEndpointAddress.reset();
+	zapretUdpFakeEndpointPort=0;
+	zapretUdpFakePacketsLeft=0;
 	fd=socket(PF_INET6, SOCK_DGRAM, IPPROTO_UDP);
 	if(fd<0){
 		LOGE("error creating socket: %d / %s", errno, strerror(errno));
@@ -350,8 +366,10 @@ void NetworkSocketPosix::Open(){
 void NetworkSocketPosix::Close(){
 	closing=true;
 	failed=true;
-	zapretUdpFakeSent=false;
-	zapretTcpDesyncSent=false;
+	zapretTcpDesyncSendsLeft=0;
+	zapretUdpFakeEndpointAddress.reset();
+	zapretUdpFakeEndpointPort=0;
+	zapretUdpFakePacketsLeft=0;
 	
     if (fd>=0) {
         shutdown(fd, SHUT_RDWR);
@@ -361,8 +379,10 @@ void NetworkSocketPosix::Close(){
 }
 
 void NetworkSocketPosix::Connect(const NetworkAddress *address, uint16_t port){
-	zapretTcpDesyncSent=false;
-	zapretUdpFakeSent=false;
+	zapretTcpDesyncSendsLeft=0;
+	zapretUdpFakeEndpointAddress.reset();
+	zapretUdpFakeEndpointPort=0;
+	zapretUdpFakePacketsLeft=0;
 	const IPv4Address* v4addr=dynamic_cast<const IPv4Address*>(address);
 	const IPv6Address* v6addr=dynamic_cast<const IPv6Address*>(address);
 	struct sockaddr_in v4={0};
@@ -412,6 +432,7 @@ void NetworkSocketPosix::Connect(const NetworkAddress *address, uint16_t port){
 	}
 	tcpConnectedAddress=v4addr ? (NetworkAddress*)new IPv4Address(*v4addr) : (NetworkAddress*)new IPv6Address(*v6addr);
 	tcpConnectedPort=port;
+	zapretTcpDesyncSendsLeft=zapret::GetTcpDesyncCutoffPackets(true, port);
 	LOGI("successfully connected to %s:%d", tcpConnectedAddress->ToString().c_str(), tcpConnectedPort);
 }
 

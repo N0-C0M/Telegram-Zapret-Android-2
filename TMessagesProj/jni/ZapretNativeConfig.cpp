@@ -31,6 +31,7 @@ struct Rule {
     std::vector<std::string> splitPositions;
     int repeats = 1;
     int cutoffBytes = 0;
+    int cutoffPackets = 0;
 };
 
 struct NativeConfig {
@@ -148,6 +149,7 @@ bool parseRuleLine(const std::string &line, bool tcp, Rule *rule) {
             int cutoffBytes = 0;
             if (parsePositiveInt(cutoffValue, &cutoffBytes)) {
                 rule->cutoffBytes = cutoffBytes;
+                rule->cutoffPackets = cutoffBytes;
             } else {
                 size_t digitStart = 0;
                 while (digitStart < cutoffValue.size() && !std::isdigit(static_cast<unsigned char>(cutoffValue[digitStart]))) {
@@ -155,6 +157,7 @@ bool parseRuleLine(const std::string &line, bool tcp, Rule *rule) {
                 }
                 if (digitStart < cutoffValue.size() && parsePositiveInt(cutoffValue.substr(digitStart), &cutoffBytes)) {
                     rule->cutoffBytes = std::max(24, cutoffBytes * 16);
+                    rule->cutoffPackets = cutoffBytes;
                 }
             }
         }
@@ -281,6 +284,43 @@ size_t defaultSplitPosition(bool forCalls, size_t length) {
     return std::max<size_t>(1, preferred);
 }
 
+constexpr size_t kMaxTcpSplitPositions = 6;
+
+std::vector<size_t> expandMultiSplitPositions(const std::vector<size_t> &positions, size_t length, int repeats) {
+    std::vector<size_t> unique = positions;
+    std::sort(unique.begin(), unique.end());
+    unique.erase(std::unique(unique.begin(), unique.end()), unique.end());
+
+    if (length <= 3) {
+        return unique;
+    }
+
+    size_t targetSplits = static_cast<size_t>(std::max(2, std::min(repeats > 0 ? repeats : 2, static_cast<int>(kMaxTcpSplitPositions))));
+    if (unique.empty()) {
+        unique.push_back(std::max<size_t>(1, std::min(length - 1, length / 2)));
+    }
+
+    const size_t seed = unique.front();
+    const size_t step = std::max<size_t>(1, std::min<size_t>(4, seed));
+    while (unique.size() < targetSplits) {
+        size_t candidate = seed + unique.size() * step;
+        if (candidate >= length) {
+            candidate = std::max<size_t>(1, length > unique.size() + 1 ? length - (unique.size() + 1) : 1);
+        }
+        if (candidate == 0 || candidate >= length) {
+            break;
+        }
+        if (std::find(unique.begin(), unique.end(), candidate) != unique.end()) {
+            break;
+        }
+        unique.push_back(candidate);
+    }
+
+    std::sort(unique.begin(), unique.end());
+    unique.erase(std::unique(unique.begin(), unique.end()), unique.end());
+    return unique;
+}
+
 size_t resolveSingleSplitPosition(const std::string &token, bool forCalls, const uint8_t *data, size_t length) {
     if (length <= 1) {
         return 0;
@@ -373,6 +413,10 @@ TcpChunkPlan buildChunkPlan(const Rule &rule, bool forCalls, const uint8_t *data
         return plan;
     }
 
+    if (rule.repeats > 1 || splitPositions.size() < 2) {
+        splitPositions = expandMultiSplitPositions(splitPositions, length, std::max(2, rule.repeats));
+    }
+
     size_t furthestSplit = splitPositions.back();
     size_t cutoff = rule.cutoffBytes > 0
         ? std::min(length, std::max<size_t>(furthestSplit + 1, rule.cutoffBytes))
@@ -400,7 +444,7 @@ TcpChunkPlan buildChunkPlan(const Rule &rule, bool forCalls, const uint8_t *data
 }
 
 int clampUdpRepeats(int repeats) {
-    return std::max(1, std::min(repeats, 4));
+    return std::max(1, std::min(repeats, 6));
 }
 
 } // namespace
@@ -423,6 +467,24 @@ TcpChunkPlan BuildTcpChunkPlan(bool forCalls, uint16_t port, const uint8_t *data
     return buildChunkPlan(*rule, forCalls, data, length);
 }
 
+int GetTcpDesyncCutoffPackets(bool forCalls, uint16_t port) {
+    NativeConfig config = snapshot();
+    if (!config.enabled || (forCalls ? !config.applyToCalls : !config.applyToMessages)) {
+        return 0;
+    }
+    const Rule *rule = findRule(config.tcpRules, port);
+    if (rule == nullptr) {
+        return 0;
+    }
+    const bool wantsSplit = hasMode(*rule, "split2") || hasMode(*rule, "multisplit") || hasMode(*rule, "multidisorder") ||
+        hasMode(*rule, "fakedsplit") || hasMode(*rule, "hostfakesplit") || hasMode(*rule, "fake");
+    if (!wantsSplit) {
+        return 0;
+    }
+    int cutoff = rule->cutoffPackets > 0 ? rule->cutoffPackets : 3;
+    return std::max(1, std::min(cutoff, 12));
+}
+
 int GetUdpFakeRepeats(bool forCalls, uint16_t port) {
     NativeConfig config = snapshot();
     if (!config.enabled || (forCalls ? !config.applyToCalls : !config.applyToMessages)) {
@@ -433,6 +495,19 @@ int GetUdpFakeRepeats(bool forCalls, uint16_t port) {
         return 0;
     }
     return clampUdpRepeats(rule->repeats);
+}
+
+int GetUdpFakeCutoffPackets(bool forCalls, uint16_t port) {
+    NativeConfig config = snapshot();
+    if (!config.enabled || (forCalls ? !config.applyToCalls : !config.applyToMessages)) {
+        return 0;
+    }
+    const Rule *rule = findRule(config.udpRules, port);
+    if (rule == nullptr || !hasMode(*rule, "fake")) {
+        return 0;
+    }
+    int cutoff = rule->cutoffPackets > 0 ? rule->cutoffPackets : 2;
+    return std::max(1, std::min(cutoff, 8));
 }
 
 size_t BuildUdpFakePayload(const uint8_t *data, size_t length, int repeatIndex, uint8_t *output, size_t outputCapacity) {

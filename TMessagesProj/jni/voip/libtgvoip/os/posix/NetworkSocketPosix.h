@@ -10,6 +10,7 @@
 #include "../../NetworkSocket.h"
 #include "../../Buffers.h"
 #include <vector>
+#include <memory>
 #include <sys/select.h>
 #include <pthread.h>
 
@@ -70,8 +71,10 @@ private:
 	NetworkAddress* tcpConnectedAddress;
 	uint16_t tcpConnectedPort;
 	Buffer* pendingOutgoingPacket=NULL;
-	bool zapretTcpDesyncSent=false;
-	bool zapretUdpFakeSent=false;
+	int zapretTcpDesyncSendsLeft = 0;
+	std::unique_ptr<NetworkAddress> zapretUdpFakeEndpointAddress;
+	uint16_t zapretUdpFakeEndpointPort = 0;
+	int zapretUdpFakePacketsLeft = 0;
 };
 
 }

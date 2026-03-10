@@ -461,7 +461,10 @@ void ConnectionSocket::openConnection(std::string address, uint16_t port, std::s
     waitingForHostResolve = "";
     adjustWriteOpAfterResolve = false;
     tlsState = 0;
-    zapretTcpDesyncSendsLeft = 3;
+    {
+        int cutoff = zapret::GetTcpDesyncCutoffPackets(false, port);
+        zapretTcpDesyncSendsLeft = static_cast<int8_t>(std::max(0, std::min(cutoff, 127)));
+    }
     ConnectionsManager::getInstance(instanceNum).attachConnection(this);
 
     memset(&socketAddress, 0, sizeof(sockaddr_in));
