@@ -20,6 +20,7 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.ZapretConfig;
 import org.telegram.messenger.ZapretDiagnosticsController;
+import org.telegram.messenger.browser.Browser;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
@@ -55,6 +56,9 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
     private int imageTestRow;
     private int callTestRow;
     private int logRow;
+    private int linksHeaderRow;
+    private int telegramChannelRow;
+    private int githubRow;
     private int infoRow;
     private int shadowRow;
 
@@ -87,6 +91,9 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
         imageTestRow = rowCount++;
         callTestRow = rowCount++;
         logRow = rowCount++;
+        linksHeaderRow = rowCount++;
+        telegramChannelRow = rowCount++;
+        githubRow = rowCount++;
         infoRow = rowCount++;
         shadowRow = rowCount++;
         if (listAdapter != null) {
@@ -138,6 +145,14 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
                 openCallPicker();
             } else if (position == logRow) {
                 showLogDialog();
+            } else if (position == telegramChannelRow) {
+                if (getParentActivity() != null) {
+                    Browser.openUrl(getParentActivity(), "https://t.me/xower_dev");
+                }
+            } else if (position == githubRow) {
+                if (getParentActivity() != null) {
+                    Browser.openUrl(getParentActivity(), "https://github.com/N0-C0M/Telegram-Zapret-Android-2");
+                }
             }
         });
         frameLayout.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
@@ -266,14 +281,16 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
                 || position == messageTestRow
                 || position == imageTestRow
                 || position == callTestRow
-                || position == logRow;
+                || position == logRow
+                || position == telegramChannelRow
+                || position == githubRow;
         }
 
         @Override
         public int getItemViewType(int position) {
             if (position == shadowRow) {
                 return 0;
-            } else if (position == generalHeaderRow || position == testsHeaderRow) {
+            } else if (position == generalHeaderRow || position == testsHeaderRow || position == linksHeaderRow) {
                 return 2;
             } else if (position == enabledRow) {
                 return 3;
@@ -340,6 +357,10 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
                         cell.setTextAndValue(LocaleController.getString(R.string.ZapretDebugRunCallTest), ZapretDiagnosticsController.getInstance().getTestSummary(ZapretDiagnosticsController.TEST_CALL), true);
                     } else if (position == logRow) {
                         cell.setText(LocaleController.getString(R.string.ZapretDebugShowLog), false);
+                    } else if (position == telegramChannelRow) {
+                        cell.setTextAndValue(LocaleController.getString(R.string.ZapretTelegramChannel), "t.me/xower_dev", true);
+                    } else if (position == githubRow) {
+                        cell.setTextAndValue(LocaleController.getString(R.string.ZapretGitHub), "github.com/N0-C0M/Telegram-Zapret-Android-2", false);
                     }
                     break;
                 }
@@ -349,6 +370,8 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
                         headerCell.setText(LocaleController.getString(R.string.ZapretGeneralSection));
                     } else if (position == testsHeaderRow) {
                         headerCell.setText(LocaleController.getString(R.string.ZapretTestsSection));
+                    } else if (position == linksHeaderRow) {
+                        headerCell.setText(LocaleController.getString(R.string.ZapretLinksSection));
                     }
                     break;
                 }

@@ -266,6 +266,9 @@
     <string name="ZapretTitle">Zapret</string>
     <string name="ZapretGeneralSection">Общие</string>
     <string name="ZapretTestsSection">Тесты</string>
+    <string name="ZapretLinksSection">Ссылки</string>
+    <string name="ZapretTelegramChannel">Telegram канал</string>
+    <string name="ZapretGitHub">GitHub</string>
     <string name="ZapretCustomSection">Пользовательская конфигурация</string>
     <string name="ZapretEnabled">Включить zapret</string>
     <string name="ZapretConfigurationSource">Источник конфигурации</string>

@@ -9823,6 +9823,9 @@
     <string name="ZapretTitle">Zapret</string>
     <string name="ZapretGeneralSection">General</string>
     <string name="ZapretTestsSection">Tests</string>
+    <string name="ZapretLinksSection">Links</string>
+    <string name="ZapretTelegramChannel">Telegram channel</string>
+    <string name="ZapretGitHub">GitHub</string>
     <string name="ZapretCustomSection">Custom Configuration</string>
     <string name="ZapretEnabled">Enable zapret</string>
     <string name="ZapretConfigurationSource">Configuration Source</string>
