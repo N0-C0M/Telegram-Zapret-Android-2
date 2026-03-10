@@ -48,6 +48,7 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
     private int generalHeaderRow;
     private int enabledRow;
     private int strategyRow;
+    private int callCompatibilityRow;
     private int runtimeRow;
     private int previewRow;
     private int testsHeaderRow;
@@ -83,6 +84,7 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
         generalHeaderRow = rowCount++;
         enabledRow = rowCount++;
         strategyRow = rowCount++;
+        callCompatibilityRow = rowCount++;
         runtimeRow = rowCount++;
         previewRow = rowCount++;
         testsHeaderRow = rowCount++;
@@ -131,6 +133,8 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
         listView.setOnItemClickListener((view, position, x, y) -> {
             if (position == enabledRow) {
                 ZapretConfig.setEnabled(!ZapretConfig.isEnabled());
+            } else if (position == callCompatibilityRow) {
+                ZapretConfig.setCallCompatibilityModeEnabled(!ZapretConfig.isCallCompatibilityModeEnabled());
             } else if (position == strategyRow) {
                 showStrategyDialog();
             } else if (position == previewRow) {
@@ -275,6 +279,7 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
         public boolean isEnabled(RecyclerView.ViewHolder holder) {
             int position = holder.getAdapterPosition();
             return position == enabledRow
+                || position == callCompatibilityRow
                 || position == strategyRow
                 || position == previewRow
                 || position == connectionTestRow
@@ -292,7 +297,7 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
                 return 0;
             } else if (position == generalHeaderRow || position == testsHeaderRow || position == linksHeaderRow) {
                 return 2;
-            } else if (position == enabledRow) {
+            } else if (position == enabledRow || position == callCompatibilityRow) {
                 return 3;
             } else if (position == infoRow) {
                 return 4;
@@ -377,7 +382,11 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
                 }
                 case 3: {
                     TextCheckCell checkCell = (TextCheckCell) holder.itemView;
-                    checkCell.setTextAndCheck(LocaleController.getString(R.string.ZapretEnabled), ZapretConfig.isEnabled(), false);
+                    if (position == enabledRow) {
+                        checkCell.setTextAndCheck(LocaleController.getString(R.string.ZapretEnabled), ZapretConfig.isEnabled(), true);
+                    } else if (position == callCompatibilityRow) {
+                        checkCell.setTextAndCheck(LocaleController.getString(R.string.ZapretCallCompatibility), ZapretConfig.isCallCompatibilityModeEnabled(), true);
+                    }
                     break;
                 }
                 case 4: {
@@ -392,7 +401,13 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
         @Override
         public void onViewAttachedToWindow(RecyclerView.ViewHolder holder) {
             if (holder.getItemViewType() == 3) {
-                ((TextCheckCell) holder.itemView).setChecked(ZapretConfig.isEnabled());
+                int position = holder.getAdapterPosition();
+                TextCheckCell cell = (TextCheckCell) holder.itemView;
+                if (position == enabledRow) {
+                    cell.setChecked(ZapretConfig.isEnabled());
+                } else if (position == callCompatibilityRow) {
+                    cell.setChecked(ZapretConfig.isCallCompatibilityModeEnabled());
+                }
             }
         }
     }

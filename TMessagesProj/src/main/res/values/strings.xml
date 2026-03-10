@@ -9828,6 +9828,7 @@
     <string name="ZapretGitHub">GitHub</string>
     <string name="ZapretCustomSection">Custom Configuration</string>
     <string name="ZapretEnabled">Enable zapret</string>
+    <string name="ZapretCallCompatibility">Call compatibility mode (TCP, no P2P)</string>
     <string name="ZapretConfigurationSource">Configuration Source</string>
     <string name="ZapretSourceBuiltIn">Built-in</string>
     <string name="ZapretSourceCustom">Custom</string>

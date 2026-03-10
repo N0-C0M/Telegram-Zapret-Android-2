@@ -78,10 +78,13 @@ int RawTcpSocket::Send(const void* pv,
   frame.insert(frame.end(), payloadBytes, payloadBytes + cb);
 
   int res;
-  if (!did_send_zapret_desync_) {
-    zapret::TcpChunkPlan plan = zapret::BuildTcpChunkPlan(true, GetRemoteAddress().port(), frame.data(), frame.size());
+  const uint16_t port = static_cast<uint16_t>(GetRemoteAddress().port());
+  if (zapret_desync_sends_left_ < 0) {
+    zapret_desync_sends_left_ = zapret::GetTcpDesyncCutoffPackets(true, port);
+  }
+  if (zapret_desync_sends_left_ > 0) {
+    zapret::TcpChunkPlan plan = zapret::BuildTcpChunkPlan(true, port, frame.data(), frame.size());
     if (plan.enabled) {
-      did_send_zapret_desync_ = true;
       size_t offset = 0;
       res = static_cast<int>(frame.size());
       for (size_t chunkSize : plan.chunks) {
@@ -115,6 +118,9 @@ int RawTcpSocket::Send(const void* pv,
           ClearOutBuffer();
           res = flushRes;
         }
+      }
+      if (res > 0) {
+        zapret_desync_sends_left_--;
       }
     } else {
       AppendToOutBuffer(frame.data(), frame.size());

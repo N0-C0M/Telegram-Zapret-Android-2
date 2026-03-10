@@ -46,7 +46,7 @@ class RawTcpSocket : public AsyncTCPSocketBase {
 
 private:
   bool did_send_mtproto_prologue_ = false;
-  bool did_send_zapret_desync_ = false;
+  int zapret_desync_sends_left_ = -1;
 };
 
 }  // namespace rtc

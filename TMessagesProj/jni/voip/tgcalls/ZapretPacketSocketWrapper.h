@@ -50,30 +50,22 @@ public:
     }
 
     int Send(const void *pv, size_t cb, const rtc::PacketOptions &options) override {
-        if (!zapretTcpDesyncSent_) {
-            rtc::SocketAddress remoteAddress = wrappedSocket_->GetRemoteAddress();
-            if (!remoteAddress.IsNil()) {
+        rtc::SocketAddress remoteAddress = wrappedSocket_->GetRemoteAddress();
+        if (!remoteAddress.IsNil()) {
+            const uint16_t port = static_cast<uint16_t>(remoteAddress.port());
+            if (zapretTcpDesyncPort_ != port) {
+                zapretTcpDesyncPort_ = port;
+                zapretTcpDesyncSendsLeft_ = zapret::GetTcpDesyncCutoffPackets(true, port);
+            }
+            if (zapretTcpDesyncSendsLeft_ > 0) {
                 const auto *bytes = reinterpret_cast<const uint8_t *>(pv);
-                zapret::TcpChunkPlan plan = zapret::BuildTcpChunkPlan(true, remoteAddress.port(), bytes, cb);
+                zapret::TcpChunkPlan plan = zapret::BuildTcpChunkPlan(true, port, bytes, cb);
                 if (plan.enabled && !plan.chunks.empty()) {
-                    size_t offset = 0;
-                    int total = 0;
-                    for (size_t chunkLength : plan.chunks) {
-                        if (chunkLength == 0 || offset >= cb) {
-                            continue;
-                        }
-                        chunkLength = std::min(chunkLength, cb - offset);
-                        int sent = wrappedSocket_->Send(bytes + offset, chunkLength, options);
-                        if (sent < 0) {
-                            return sent;
-                        }
-                        total += sent;
-                        offset += chunkLength;
+                    const int sent = sendChunked(bytes, cb, plan, options);
+                    if (sent > 0) {
+                        zapretTcpDesyncSendsLeft_--;
                     }
-                    zapretTcpDesyncSent_ = offset > 0;
-                    if (zapretTcpDesyncSent_) {
-                        return total;
-                    }
+                    return sent;
                 }
             }
         }
@@ -81,8 +73,13 @@ public:
     }
 
     int SendTo(const void *pv, size_t cb, const rtc::SocketAddress &addr, const rtc::PacketOptions &options) override {
-        if (!zapretUdpFakeSent_) {
-            const int repeats = zapret::GetUdpFakeRepeats(true, addr.port());
+        if (!zapretUdpFakeEndpointSet_ || addr != zapretUdpFakeEndpoint_) {
+            zapretUdpFakeEndpoint_ = addr;
+            zapretUdpFakeEndpointSet_ = true;
+            zapretUdpFakePacketsLeft_ = zapret::GetUdpFakeCutoffPackets(true, static_cast<uint16_t>(addr.port()));
+        }
+        if (zapretUdpFakePacketsLeft_ > 0) {
+            const int repeats = zapret::GetUdpFakeRepeats(true, static_cast<uint16_t>(addr.port()));
             if (repeats > 0) {
                 uint8_t fakePacket[32];
                 for (int i = 0; i < repeats; i++) {
@@ -91,7 +88,9 @@ public:
                         wrappedSocket_->SendTo(fakePacket, fakeLength, addr, options);
                     }
                 }
-                zapretUdpFakeSent_ = true;
+                zapretUdpFakePacketsLeft_--;
+            } else {
+                zapretUdpFakePacketsLeft_ = 0;
             }
         }
         return wrappedSocket_->SendTo(pv, cb, addr, options);
@@ -122,6 +121,30 @@ public:
     }
 
 private:
+    int sendChunked(const uint8_t *data, size_t size, const zapret::TcpChunkPlan &plan, const rtc::PacketOptions &options) {
+        size_t offset = 0;
+        int totalSent = 0;
+        for (size_t chunkSize : plan.chunks) {
+            if (offset >= size) {
+                break;
+            }
+            chunkSize = std::min(chunkSize, size - offset);
+            if (chunkSize == 0) {
+                continue;
+            }
+            int sent = wrappedSocket_->Send(data + offset, chunkSize, options);
+            if (sent < 0) {
+                return totalSent > 0 ? totalSent : sent;
+            }
+            totalSent += sent;
+            offset += static_cast<size_t>(sent);
+            if (static_cast<size_t>(sent) < chunkSize) {
+                break;
+            }
+        }
+        return totalSent;
+    }
+
     void onReadPacket(const rtc::ReceivedPacket &packet) {
         NotifyPacketReceived(packet);
     }
@@ -147,8 +170,11 @@ private:
     }
 
     std::unique_ptr<rtc::AsyncPacketSocket> wrappedSocket_;
-    bool zapretTcpDesyncSent_ = false;
-    bool zapretUdpFakeSent_ = false;
+    uint16_t zapretTcpDesyncPort_ = 0;
+    int zapretTcpDesyncSendsLeft_ = 0;
+    rtc::SocketAddress zapretUdpFakeEndpoint_;
+    bool zapretUdpFakeEndpointSet_ = false;
+    int zapretUdpFakePacketsLeft_ = 0;
 };
 
 class WrappedPacketSocketFactory : public rtc::PacketSocketFactory {

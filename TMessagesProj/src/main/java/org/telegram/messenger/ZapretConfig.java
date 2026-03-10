@@ -40,6 +40,7 @@ public final class ZapretConfig {
     private static final String KEY_PROXY_USERNAME = "zapret_proxy_username";
     private static final String KEY_PROXY_PASSWORD = "zapret_proxy_password";
     private static final String KEY_LOCAL_VPN_ENABLED = "zapret_local_vpn_enabled";
+    private static final String KEY_CALL_COMPATIBILITY_MODE = "zapret_call_compat_mode";
 
     private static final String[] BUILTIN_CONFIGS = {
         "# PC general.bat adapted for Telegram-only native runtime\n" +
@@ -413,11 +414,20 @@ public final class ZapretConfig {
     }
 
     public static boolean shouldHardenCallsOverProxy() {
-        return false;
+        return isEnabled() && isCallCompatibilityModeEnabled();
     }
 
     public static boolean shouldUseLocalVpn() {
         return false;
+    }
+
+    public static boolean isCallCompatibilityModeEnabled() {
+        return getPreferences().getBoolean(KEY_CALL_COMPATIBILITY_MODE, false);
+    }
+
+    public static void setCallCompatibilityModeEnabled(boolean enabled) {
+        getPreferences().edit().putBoolean(KEY_CALL_COMPATIBILITY_MODE, enabled).apply();
+        notifyConfigChanged();
     }
 
     public static void syncNativeConfig() {
