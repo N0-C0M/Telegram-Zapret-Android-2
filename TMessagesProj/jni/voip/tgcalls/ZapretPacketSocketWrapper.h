@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <vector>
 
 namespace tgcalls {
 namespace zapret_internal {
@@ -73,12 +74,39 @@ public:
     }
 
     int SendTo(const void *pv, size_t cb, const rtc::SocketAddress &addr, const rtc::PacketOptions &options) override {
-        if (!zapretUdpFakeEndpointSet_ || addr != zapretUdpFakeEndpoint_) {
-            zapretUdpFakeEndpoint_ = addr;
-            zapretUdpFakeEndpointSet_ = true;
-            zapretUdpFakePacketsLeft_ = zapret::GetUdpFakeCutoffPackets(true, static_cast<uint16_t>(addr.port()));
+        size_t entryIndex = zapretUdpFakeEndpoints_.size();
+        for (size_t i = 0; i < zapretUdpFakeEndpoints_.size(); i++) {
+            if (zapretUdpFakeEndpoints_[i].address == addr) {
+                entryIndex = i;
+                break;
+            }
         }
-        if (zapretUdpFakePacketsLeft_ > 0) {
+
+        if (entryIndex == zapretUdpFakeEndpoints_.size()) {
+            if (zapretUdpFakeEndpoints_.size() >= kMaxZapretUdpFakeEndpoints) {
+                size_t evictIndex = 0;
+                for (size_t i = 0; i < zapretUdpFakeEndpoints_.size(); i++) {
+                    if (zapretUdpFakeEndpoints_[i].packetsLeft <= 0) {
+                        evictIndex = i;
+                        break;
+                    }
+                }
+                zapretUdpFakeEndpoints_.erase(zapretUdpFakeEndpoints_.begin() + evictIndex);
+            }
+
+            UdpFakeEndpoint entry;
+            entry.address = addr;
+            entry.packetsLeft = zapret::GetUdpFakeCutoffPackets(true, static_cast<uint16_t>(addr.port()));
+            zapretUdpFakeEndpoints_.push_back(std::move(entry));
+            entryIndex = zapretUdpFakeEndpoints_.size() - 1;
+        } else if (entryIndex + 1 != zapretUdpFakeEndpoints_.size()) {
+            UdpFakeEndpoint entry = std::move(zapretUdpFakeEndpoints_[entryIndex]);
+            zapretUdpFakeEndpoints_.erase(zapretUdpFakeEndpoints_.begin() + entryIndex);
+            zapretUdpFakeEndpoints_.push_back(std::move(entry));
+            entryIndex = zapretUdpFakeEndpoints_.size() - 1;
+        }
+
+        if (entryIndex < zapretUdpFakeEndpoints_.size() && zapretUdpFakeEndpoints_[entryIndex].packetsLeft > 0) {
             const int repeats = zapret::GetUdpFakeRepeats(true, static_cast<uint16_t>(addr.port()));
             if (repeats > 0) {
                 uint8_t fakePacket[32];
@@ -88,9 +116,9 @@ public:
                         wrappedSocket_->SendTo(fakePacket, fakeLength, addr, options);
                     }
                 }
-                zapretUdpFakePacketsLeft_--;
+                zapretUdpFakeEndpoints_[entryIndex].packetsLeft--;
             } else {
-                zapretUdpFakePacketsLeft_ = 0;
+                zapretUdpFakeEndpoints_[entryIndex].packetsLeft = 0;
             }
         }
         return wrappedSocket_->SendTo(pv, cb, addr, options);
@@ -169,12 +197,17 @@ private:
         SignalClose(this, error);
     }
 
+    struct UdpFakeEndpoint {
+        rtc::SocketAddress address;
+        int packetsLeft = 0;
+    };
+
+    static constexpr size_t kMaxZapretUdpFakeEndpoints = 16;
+
     std::unique_ptr<rtc::AsyncPacketSocket> wrappedSocket_;
     uint16_t zapretTcpDesyncPort_ = 0;
     int zapretTcpDesyncSendsLeft_ = 0;
-    rtc::SocketAddress zapretUdpFakeEndpoint_;
-    bool zapretUdpFakeEndpointSet_ = false;
-    int zapretUdpFakePacketsLeft_ = 0;
+    std::vector<UdpFakeEndpoint> zapretUdpFakeEndpoints_;
 };
 
 class WrappedPacketSocketFactory : public rtc::PacketSocketFactory {

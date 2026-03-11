@@ -422,7 +422,7 @@ public final class ZapretConfig {
     }
 
     public static boolean isCallCompatibilityModeEnabled() {
-        return getPreferences().getBoolean(KEY_CALL_COMPATIBILITY_MODE, false);
+        return getPreferences().getBoolean(KEY_CALL_COMPATIBILITY_MODE, true);
     }
 
     public static void setCallCompatibilityModeEnabled(boolean enabled) {
