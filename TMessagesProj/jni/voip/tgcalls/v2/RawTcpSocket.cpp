@@ -79,7 +79,10 @@ int RawTcpSocket::Send(const void* pv,
 
   int res;
   const uint16_t port = static_cast<uint16_t>(GetRemoteAddress().port());
-  if (zapret_desync_sends_left_ < 0) {
+  const uint32_t currentConfigRevision = zapret::GetConfigRevision();
+  if (zapret_desync_sends_left_ < 0 || zapret_desync_port_ != port || zapret_config_revision_ != currentConfigRevision) {
+    zapret_desync_port_ = port;
+    zapret_config_revision_ = currentConfigRevision;
     zapret_desync_sends_left_ = zapret::GetTcpDesyncCutoffPackets(true, port);
   }
   if (zapret_desync_sends_left_ > 0) {

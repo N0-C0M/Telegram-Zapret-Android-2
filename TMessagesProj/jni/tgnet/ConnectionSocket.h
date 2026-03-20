@@ -80,6 +80,10 @@ private:
     size_t bytesRead = 0;
     int8_t tlsState = 0;
     int8_t zapretTcpDesyncSendsLeft = 0;
+    uint32_t zapretConfigRevision = 0;
+    size_t tlsPendingFrameOffset = 0;
+    size_t tlsPendingFrameSize = 0;
+    size_t tlsPendingHeadersSize = 0;
 
     uint8_t proxyAuthState;
 

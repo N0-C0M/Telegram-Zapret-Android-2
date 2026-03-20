@@ -461,7 +461,11 @@ void ConnectionSocket::openConnection(std::string address, uint16_t port, std::s
     waitingForHostResolve = "";
     adjustWriteOpAfterResolve = false;
     tlsState = 0;
+    tlsPendingFrameOffset = 0;
+    tlsPendingFrameSize = 0;
+    tlsPendingHeadersSize = 0;
     {
+        zapretConfigRevision = zapret::GetConfigRevision();
         int cutoff = zapret::GetTcpDesyncCutoffPackets(false, port);
         zapretTcpDesyncSendsLeft = static_cast<int8_t>(std::max(0, std::min(cutoff, 127)));
     }
@@ -664,6 +668,10 @@ void ConnectionSocket::closeSocket(int32_t reason, int32_t error) {
     proxyAuthState = 0;
     tlsState = 0;
     zapretTcpDesyncSendsLeft = 0;
+    zapretConfigRevision = 0;
+    tlsPendingFrameOffset = 0;
+    tlsPendingFrameSize = 0;
+    tlsPendingHeadersSize = 0;
     onConnectedSent = false;
     outgoingByteStream->clean();
     if (tlsBuffer != nullptr) {
@@ -1000,49 +1008,81 @@ void ConnectionSocket::onEvent(uint32_t events) {
 
                 uint32_t remaining = buffer->remaining();
                 if (remaining) {
+                    uint32_t currentRevision = zapret::GetConfigRevision();
+                    if (zapretConfigRevision != currentRevision) {
+                        zapretConfigRevision = currentRevision;
+                        int cutoff = zapret::GetTcpDesyncCutoffPackets(false, currentPort);
+                        zapretTcpDesyncSendsLeft = static_cast<int8_t>(std::max(0, std::min(cutoff, 127)));
+                    }
                     ssize_t sentLength;
                     if (tlsState != 0) {
-                        if (remaining > 2878) {
-                            remaining = 2878;
+                        if (tlsPendingFrameSize == 0 || tlsPendingFrameOffset >= tlsPendingFrameSize) {
+                            if (remaining > 2878) {
+                                remaining = 2878;
+                            }
+                            size_t headersSize = 0;
+                            if (tlsState == 1) {
+                                static std::string header1 = std::string("\x14\x03\x03\x00\x01\x01", 6);
+                                std::memcpy(tempBuffer->bytes, header1.data(), header1.size());
+                                headersSize += header1.size();
+                                tlsState = 2;
+                            }
+                            static std::string header2 = std::string("\x17\x03\x03", 3);
+                            std::memcpy(tempBuffer->bytes + headersSize, header2.data(), header2.size());
+                            headersSize += header2.size();
+
+                            tempBuffer->bytes[headersSize] = static_cast<uint8_t>((remaining >> 8) & 0xff);
+                            tempBuffer->bytes[headersSize + 1] = static_cast<uint8_t>(remaining & 0xff);
+                            headersSize += 2;
+
+                            std::memcpy(tempBuffer->bytes + headersSize, buffer->bytes(), remaining);
+                            tlsPendingFrameOffset = 0;
+                            tlsPendingHeadersSize = headersSize;
+                            tlsPendingFrameSize = headersSize + remaining;
                         }
-                        size_t headersSize = 0;
-                        if (tlsState == 1) {
-                            static std::string header1 = std::string("\x14\x03\x03\x00\x01\x01", 6);
-                            std::memcpy(tempBuffer->bytes, header1.data(), header1.size());
-                            headersSize += header1.size();
-                            tlsState = 2;
-                        }
-                        static std::string header2 = std::string("\x17\x03\x03", 3);
-                        std::memcpy(tempBuffer->bytes + headersSize, header2.data(), header2.size());
-                        headersSize += header2.size();
 
-                        tempBuffer->bytes[headersSize] = static_cast<uint8_t>((remaining >> 8) & 0xff);
-                        tempBuffer->bytes[headersSize + 1] = static_cast<uint8_t>(remaining & 0xff);
-                        headersSize += 2;
-
-                        std::memcpy(tempBuffer->bytes + headersSize, buffer->bytes(), remaining);
-
-                        if (zapretTcpDesyncSendsLeft > 0) {
-                            zapret::TcpChunkPlan plan = zapret::BuildTcpChunkPlan(false, currentPort, reinterpret_cast<const uint8_t *>(buffer->bytes()), remaining);
+                        const uint8_t *pendingFrame = reinterpret_cast<const uint8_t *>(tempBuffer->bytes);
+                        const size_t pendingToSend = tlsPendingFrameSize - tlsPendingFrameOffset;
+                        if (tlsPendingFrameOffset == 0 && zapretTcpDesyncSendsLeft > 0) {
+                            size_t payloadSize = tlsPendingFrameSize > tlsPendingHeadersSize ? tlsPendingFrameSize - tlsPendingHeadersSize : 0;
+                            zapret::TcpChunkPlan plan = zapret::BuildTcpChunkPlan(false, currentPort, pendingFrame + tlsPendingHeadersSize, payloadSize);
                             if (plan.enabled && !plan.chunks.empty()) {
-                                plan.chunks[0] += headersSize;
+                                plan.chunks[0] += tlsPendingHeadersSize;
                                 zapretTcpDesyncSendsLeft--;
-                                sentLength = sendChunkedZapretPayload(socketFd, reinterpret_cast<const uint8_t *>(tempBuffer->bytes), headersSize + remaining, plan);
+                                sentLength = sendChunkedZapretPayload(socketFd, pendingFrame, tlsPendingFrameSize, plan);
                             } else {
-                                sentLength = send(socketFd, tempBuffer->bytes, headersSize + remaining, 0);
+                                sentLength = send(socketFd, pendingFrame, tlsPendingFrameSize, 0);
                             }
                         } else {
-                            sentLength = send(socketFd, tempBuffer->bytes, headersSize + remaining, 0);
+                            sentLength = send(socketFd, pendingFrame + tlsPendingFrameOffset, pendingToSend, 0);
                         }
-                        if (sentLength < headersSize) {
+
+                        if (sentLength < 0) {
                             if (LOGS_ENABLED) DEBUG_E("connection(%p) send failed", this);
                             closeSocket(1, -1);
                             return;
                         } else {
+                            size_t previousOffset = tlsPendingFrameOffset;
+                            size_t nextOffset = std::min(tlsPendingFrameSize, tlsPendingFrameOffset + static_cast<size_t>(sentLength));
+                            tlsPendingFrameOffset = nextOffset;
+
+                            size_t payloadSent = 0;
+                            if (nextOffset > tlsPendingHeadersSize) {
+                                size_t payloadStart = std::max(previousOffset, tlsPendingHeadersSize);
+                                payloadSent = nextOffset - payloadStart;
+                            }
+
                             if (ConnectionsManager::getInstance(instanceNum).delegate != nullptr) {
                                 ConnectionsManager::getInstance(instanceNum).delegate->onBytesSent((int32_t) sentLength, currentNetworkType, instanceNum);
                             }
-                            outgoingByteStream->discard((uint32_t) (sentLength - headersSize));
+                            if (payloadSent > 0) {
+                                outgoingByteStream->discard((uint32_t) payloadSent);
+                            }
+                            if (tlsPendingFrameOffset >= tlsPendingFrameSize) {
+                                tlsPendingFrameOffset = 0;
+                                tlsPendingFrameSize = 0;
+                                tlsPendingHeadersSize = 0;
+                            }
                             adjustWriteOp();
                         }
                     } else {

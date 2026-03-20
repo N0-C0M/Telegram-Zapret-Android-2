@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -32,6 +33,7 @@ struct Rule {
     int repeats = 1;
     int cutoffBytes = 0;
     int cutoffPackets = 0;
+    bool udpAnyProtocol = false;
 };
 
 struct NativeConfig {
@@ -43,7 +45,8 @@ struct NativeConfig {
 };
 
 std::mutex configMutex;
-NativeConfig currentConfig;
+std::shared_ptr<const NativeConfig> currentConfig = std::make_shared<NativeConfig>();
+uint32_t configRevision = 1;
 
 std::string trim(std::string value) {
     size_t start = 0;
@@ -74,6 +77,28 @@ bool parsePositiveInt(const std::string &value, int *result) {
         return false;
     }
     *result = static_cast<int>(parsed);
+    return true;
+}
+
+bool parseBoolToken(const std::string &value, bool *result) {
+    std::string normalized = toLower(trim(value));
+    if (normalized.empty()) {
+        return false;
+    }
+    if (normalized == "true" || normalized == "yes" || normalized == "on") {
+        *result = true;
+        return true;
+    }
+    if (normalized == "false" || normalized == "no" || normalized == "off") {
+        *result = false;
+        return true;
+    }
+    char *end = nullptr;
+    long parsed = std::strtol(normalized.c_str(), &end, 10);
+    if (end == normalized.c_str() || *end != '\0') {
+        return false;
+    }
+    *result = parsed != 0;
     return true;
 }
 
@@ -160,6 +185,11 @@ bool parseRuleLine(const std::string &line, bool tcp, Rule *rule) {
                     rule->cutoffPackets = cutoffBytes;
                 }
             }
+        } else if (token.find("--dpi-desync-any-protocol=") == 0) {
+            bool anyProtocol = false;
+            if (parseBoolToken(token.substr(strlen("--dpi-desync-any-protocol=")), &anyProtocol)) {
+                rule->udpAnyProtocol = anyProtocol;
+            }
         }
     }
     return hasFilter && !rule->modes.empty();
@@ -190,7 +220,7 @@ NativeConfig parseConfig(bool enabled, bool applyToMessages, bool applyToCalls, 
     return result;
 }
 
-NativeConfig snapshot() {
+std::shared_ptr<const NativeConfig> snapshot() {
     std::lock_guard<std::mutex> lock(configMutex);
     return currentConfig;
 }
@@ -444,7 +474,7 @@ TcpChunkPlan buildChunkPlan(const Rule &rule, bool forCalls, const uint8_t *data
 }
 
 int clampUdpRepeats(int repeats) {
-    return std::max(1, std::min(repeats, 6));
+    return std::max(1, std::min(repeats, 16));
 }
 
 } // namespace
@@ -452,11 +482,18 @@ int clampUdpRepeats(int repeats) {
 void UpdateNativeConfig(bool enabled, bool applyToMessages, bool applyToCalls, const std::string &config) {
     NativeConfig parsed = parseConfig(enabled, applyToMessages, applyToCalls, config);
     std::lock_guard<std::mutex> lock(configMutex);
-    currentConfig = std::move(parsed);
+    currentConfig = std::make_shared<NativeConfig>(std::move(parsed));
+    configRevision++;
+}
+
+uint32_t GetConfigRevision() {
+    std::lock_guard<std::mutex> lock(configMutex);
+    return configRevision;
 }
 
 TcpChunkPlan BuildTcpChunkPlan(bool forCalls, uint16_t port, const uint8_t *data, size_t length) {
-    NativeConfig config = snapshot();
+    std::shared_ptr<const NativeConfig> configPtr = snapshot();
+    const NativeConfig &config = *configPtr;
     if (!config.enabled || (forCalls ? !config.applyToCalls : !config.applyToMessages)) {
         return TcpChunkPlan();
     }
@@ -468,7 +505,8 @@ TcpChunkPlan BuildTcpChunkPlan(bool forCalls, uint16_t port, const uint8_t *data
 }
 
 int GetTcpDesyncCutoffPackets(bool forCalls, uint16_t port) {
-    NativeConfig config = snapshot();
+    std::shared_ptr<const NativeConfig> configPtr = snapshot();
+    const NativeConfig &config = *configPtr;
     if (!config.enabled || (forCalls ? !config.applyToCalls : !config.applyToMessages)) {
         return 0;
     }
@@ -486,7 +524,8 @@ int GetTcpDesyncCutoffPackets(bool forCalls, uint16_t port) {
 }
 
 int GetUdpFakeRepeats(bool forCalls, uint16_t port) {
-    NativeConfig config = snapshot();
+    std::shared_ptr<const NativeConfig> configPtr = snapshot();
+    const NativeConfig &config = *configPtr;
     if (!config.enabled || (forCalls ? !config.applyToCalls : !config.applyToMessages)) {
         return 0;
     }
@@ -498,7 +537,8 @@ int GetUdpFakeRepeats(bool forCalls, uint16_t port) {
 }
 
 int GetUdpFakeCutoffPackets(bool forCalls, uint16_t port) {
-    NativeConfig config = snapshot();
+    std::shared_ptr<const NativeConfig> configPtr = snapshot();
+    const NativeConfig &config = *configPtr;
     if (!config.enabled || (forCalls ? !config.applyToCalls : !config.applyToMessages)) {
         return 0;
     }
@@ -530,7 +570,8 @@ size_t BuildUdpFakePayload(const uint8_t *data, size_t length, int repeatIndex, 
 }
 
 std::string GetDebugSummary() {
-    NativeConfig config = snapshot();
+    std::shared_ptr<const NativeConfig> configPtr = snapshot();
+    const NativeConfig &config = *configPtr;
     std::stringstream stream;
     stream << "enabled=" << (config.enabled ? 1 : 0)
            << " messages=" << (config.applyToMessages ? 1 : 0)

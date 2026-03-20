@@ -15,6 +15,7 @@ struct TcpChunkPlan {
 };
 
 void UpdateNativeConfig(bool enabled, bool applyToMessages, bool applyToCalls, const std::string &config);
+uint32_t GetConfigRevision();
 TcpChunkPlan BuildTcpChunkPlan(bool forCalls, uint16_t port, const uint8_t *data, size_t length);
 int GetTcpDesyncCutoffPackets(bool forCalls, uint16_t port);
 int GetUdpFakeRepeats(bool forCalls, uint16_t port);

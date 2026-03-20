@@ -116,8 +116,40 @@ public:
                        size_t cb,
                        const rtc::SocketAddress& addr,
                        const rtc::PacketOptions& options) override {
-        if (!_zapretUdpFakeSent && _wrappedSocket->GetRemoteAddress().IsNil()) {
-            const int repeats = zapret::GetUdpFakeRepeats(true, addr.port());
+        size_t entryIndex = _zapretUdpFakeEndpoints.size();
+        for (size_t i = 0; i < _zapretUdpFakeEndpoints.size(); i++) {
+            if (_zapretUdpFakeEndpoints[i].address == addr) {
+                entryIndex = i;
+                break;
+            }
+        }
+
+        if (entryIndex == _zapretUdpFakeEndpoints.size()) {
+            if (_zapretUdpFakeEndpoints.size() >= kMaxZapretUdpFakeEndpoints) {
+                size_t evictIndex = 0;
+                for (size_t i = 0; i < _zapretUdpFakeEndpoints.size(); i++) {
+                    if (_zapretUdpFakeEndpoints[i].packetsLeft <= 0) {
+                        evictIndex = i;
+                        break;
+                    }
+                }
+                _zapretUdpFakeEndpoints.erase(_zapretUdpFakeEndpoints.begin() + evictIndex);
+            }
+
+            UdpFakeEndpoint entry;
+            entry.address = addr;
+            entry.packetsLeft = zapret::GetUdpFakeCutoffPackets(true, static_cast<uint16_t>(addr.port()));
+            _zapretUdpFakeEndpoints.push_back(std::move(entry));
+            entryIndex = _zapretUdpFakeEndpoints.size() - 1;
+        } else if (entryIndex + 1 != _zapretUdpFakeEndpoints.size()) {
+            UdpFakeEndpoint entry = std::move(_zapretUdpFakeEndpoints[entryIndex]);
+            _zapretUdpFakeEndpoints.erase(_zapretUdpFakeEndpoints.begin() + entryIndex);
+            _zapretUdpFakeEndpoints.push_back(std::move(entry));
+            entryIndex = _zapretUdpFakeEndpoints.size() - 1;
+        }
+
+        if (entryIndex < _zapretUdpFakeEndpoints.size() && _zapretUdpFakeEndpoints[entryIndex].packetsLeft > 0) {
+            const int repeats = zapret::GetUdpFakeRepeats(true, static_cast<uint16_t>(addr.port()));
             if (repeats > 0) {
                 uint8_t fakePacket[32];
                 for (int i = 0; i < repeats; i++) {
@@ -126,7 +158,9 @@ public:
                         _wrappedSocket->SendTo(fakePacket, fakeLength, addr, options);
                     }
                 }
-                _zapretUdpFakeSent = true;
+                _zapretUdpFakeEndpoints[entryIndex].packetsLeft--;
+            } else {
+                _zapretUdpFakeEndpoints[entryIndex].packetsLeft = 0;
             }
         }
         return _wrappedSocket->SendTo(pv, cb, addr, options);
@@ -182,8 +216,15 @@ private:
     }
     
 private:
+    struct UdpFakeEndpoint {
+        rtc::SocketAddress address;
+        int packetsLeft = 0;
+    };
+
+    static constexpr size_t kMaxZapretUdpFakeEndpoints = 16;
+
     std::unique_ptr<rtc::AsyncPacketSocket> _wrappedSocket;
-    bool _zapretUdpFakeSent = false;
+    std::vector<UdpFakeEndpoint> _zapretUdpFakeEndpoints;
 };
 
 class WrappedBasicPacketSocketFactory : public rtc::PacketSocketFactory {
@@ -546,7 +587,7 @@ _dataChannelMessageReceived(configuration.dataChannelMessageReceived) {
         _socketFactory = std::make_unique<WrappedBasicPacketSocketFactory>(std::make_unique<rtc::BasicPacketSocketFactory>(_threads->getNetworkThread()->socketserver()), true);
         _networkManager = std::make_unique<WrappedNetworkManager>(_networkMonitorFactory.get(), _threads->getNetworkThread()->socketserver());
     } else {
-        _socketFactory = std::make_unique<rtc::BasicPacketSocketFactory>(_threads->getNetworkThread()->socketserver());
+        _socketFactory = std::make_unique<WrappedBasicPacketSocketFactory>(std::make_unique<rtc::BasicPacketSocketFactory>(_threads->getNetworkThread()->socketserver()), false);
         _networkManager = std::make_unique<rtc::BasicNetworkManager>(_networkMonitorFactory.get(), _threads->getNetworkThread()->socketserver());
     }
     
