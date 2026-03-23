@@ -353,6 +353,7 @@ public class ApplicationLoader extends Application {
         LauncherIconController.tryFixLauncherIconIfNeeded();
         ProxyRotationController.init();
         ZapretController.init();
+        ZapretWsProxyManager.init();
         ZapretProxyManager.init();
         ZapretVpnController.init();
         ZapretDiagnosticsController.init();

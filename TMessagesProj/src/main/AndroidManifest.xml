@@ -520,6 +520,12 @@ e            <intent-filter>
             android:foregroundServiceType="camera|microphone|mediaPlayback|mediaProjection"
         />
         <service
+            android:name=".tgws.TgWsProxyService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+        />
+        <service
             android:name=".ZapretVpnService"
             android:permission="android.permission.BIND_VPN_SERVICE"
             android:exported="false">

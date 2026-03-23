@@ -1,6 +1,7 @@
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
 
 apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
 
 repositories {
     mavenCentral()
@@ -66,6 +67,7 @@ dependencies {
         }
     }
     implementation 'com.google.android.recaptcha:recaptcha:18.4.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
 
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
 }
@@ -97,6 +99,10 @@ android {
         coreLibraryDesugaringEnabled true
     }
 
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
     // AGP 8+ defaults BuildConfig generation to off for libraries; this module uses BuildConfig.
     buildFeatures {
         buildConfig = true
@@ -110,6 +116,10 @@ android {
         vectorDrawables.generatedDensities = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi']
 
         multiDexEnabled true
+
+        ndk {
+            abiFilters "arm64-v8a"
+        }
 
         externalNativeBuild {
             cmake {

@@ -194,11 +194,11 @@ public final class ZapretConfig {
     }
 
     public static boolean isProxyRoutingEnabled() {
-        return false;
+        return true;
     }
 
     public static void setProxyRoutingEnabled(boolean enabled) {
-        getPreferences().edit().putBoolean(KEY_PROXY_ROUTING, false).apply();
+        getPreferences().edit().putBoolean(KEY_PROXY_ROUTING, true).apply();
         notifyConfigChanged();
     }
 
@@ -488,10 +488,6 @@ public final class ZapretConfig {
         if (preferences.getBoolean(KEY_USE_CUSTOM, false)) {
             editor = editor != null ? editor : preferences.edit();
             editor.putBoolean(KEY_USE_CUSTOM, false);
-        }
-        if (preferences.getBoolean(KEY_PROXY_ROUTING, false)) {
-            editor = editor != null ? editor : preferences.edit();
-            editor.putBoolean(KEY_PROXY_ROUTING, false);
         }
         if (preferences.getBoolean(KEY_LOCAL_VPN_ENABLED, false)) {
             editor = editor != null ? editor : preferences.edit();

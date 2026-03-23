@@ -127,9 +127,11 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
         syncing = true;
         try {
             if (shouldManageProxy()) {
+                ZapretWsProxyManager.getInstance().ensureStarted();
                 applyManagedProxy();
             } else {
                 restorePreviousProxy();
+                ZapretWsProxyManager.getInstance().ensureStopped();
             }
         } finally {
             syncing = false;
