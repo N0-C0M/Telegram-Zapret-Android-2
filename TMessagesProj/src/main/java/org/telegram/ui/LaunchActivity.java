@@ -1537,6 +1537,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             showTosActivity(account, UserConfig.getInstance(account).unacceptedTermsOfService);
         }
         updateCurrentConnectionState(currentAccount);
+        maybeShowWelcomeForkInfoDialog();
 
         switchingAccount = false;
     }
@@ -6188,6 +6189,9 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     }
 
     private void maybeShowWelcomeForkInfoDialog() {
+        if (!UserConfig.getInstance(UserConfig.selectedAccount).isClientActivated()) {
+            return;
+        }
         SharedPreferences preferences = MessagesController.getGlobalMainSettings();
         if (welcomeForkInfoDialogScheduled || preferences.getBoolean(KEY_WELCOME_FORK_INFO_DIALOG_SHOWN, false)) {
             return;
@@ -6195,7 +6199,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         welcomeForkInfoDialogScheduled = true;
         AndroidUtilities.runOnUIThread(() -> {
             welcomeForkInfoDialogScheduled = false;
-            if (isFinishing() || !isResumed) {
+            if (isFinishing() || !isResumed || !UserConfig.getInstance(UserConfig.selectedAccount).isClientActivated()) {
                 return;
             }
             SharedPreferences prefs = MessagesController.getGlobalMainSettings();
@@ -7187,6 +7191,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             }
         } else if (id == NotificationCenter.mainUserInfoChanged) {
             drawerLayoutAdapter.notifyDataSetChanged();
+            maybeShowWelcomeForkInfoDialog();
         } else if (id == NotificationCenter.attachMenuBotsDidLoad) {
             drawerLayoutAdapter.notifyDataSetChanged();
         } else if (id == NotificationCenter.needShowAlert) {
