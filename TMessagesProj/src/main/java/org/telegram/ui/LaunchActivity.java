@@ -6222,8 +6222,13 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                     buildVersion,
                     "t.me/xower_dev"
                 ));
-                builder.setPositiveButton(LocaleController.getString(R.string.ZapretWelcomeChannelButton), (dialogInterface, which) ->
-                    prefs.edit().putBoolean(KEY_WELCOME_FORK_INFO_DIALOG_SHOWN, true).apply()
+                Runnable markWelcomeDialogShown = () -> prefs.edit().putBoolean(KEY_WELCOME_FORK_INFO_DIALOG_SHOWN, true).apply();
+                builder.setPositiveButton(LocaleController.getString(R.string.ZapretWelcomeChannelOpenButton), (dialogInterface, which) -> {
+                    markWelcomeDialogShown.run();
+                    Browser.openUrl(LaunchActivity.this, "https://t.me/xower_dev");
+                });
+                builder.setNegativeButton(LocaleController.getString(R.string.ZapretWelcomeChannelButton), (dialogInterface, which) ->
+                    markWelcomeDialogShown.run()
                 );
                 AlertDialog dialog = builder.create();
                 dialog.setCancelable(false);

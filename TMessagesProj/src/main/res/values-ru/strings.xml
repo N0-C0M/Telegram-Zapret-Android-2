@@ -274,6 +274,8 @@
     <string name="ZapretWsProxy">Use WS proxy</string>
     <string name="ZapretWsProxyIpv6">Использовать IPv6 в WS proxy</string>
     <string name="ZapretWsProxyNotification">Показывать уведомление WS proxy</string>
+    <string name="ZapretReadDeletedMessages">Читать удалённые сообщения</string>
+    <string name="ZapretReadDeletedMessagesShort">Удалённые сообщения</string>
     <string name="ZapretWsProxyStandaloneShort">WS proxy</string>
     <string name="ZapretCallCompatibility">Режим совместимости звонков (TCP, без P2P)</string>
     <string name="ZapretConfigurationSource">Источник конфигурации</string>
@@ -405,4 +407,5 @@
     <string name="ZapretWelcomeChannelTitle">Наш ТГК</string>
     <string name="ZapretWelcomeChannelText">Версия форка: %1$s\nТГК: %2$s</string>
     <string name="ZapretWelcomeChannelButton">Продолжить</string>
+    <string name="ZapretWelcomeChannelOpenButton">Открыть ТГК</string>
 </resources>

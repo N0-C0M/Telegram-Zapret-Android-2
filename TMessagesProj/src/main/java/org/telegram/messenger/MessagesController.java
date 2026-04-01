@@ -10840,6 +10840,13 @@ public class MessagesController extends BaseController implements NotificationCe
         }
     }
 
+    private LongSparseArray<ArrayList<Integer>> maybeSuppressDeletedMessages(LongSparseArray<ArrayList<Integer>> deletedMessages) {
+        if (!ZapretConfig.isReadDeletedMessagesEnabled()) {
+            return deletedMessages;
+        }
+        return null;
+    }
+
     public final static int LOAD_BACKWARD = 0;
     public final static int LOAD_FORWARD = 1;
     public final static int LOAD_FROM_UNREAD = 2;
@@ -16485,6 +16492,9 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     protected void deleteMessagesByPush(long dialogId, ArrayList<Integer> ids, long channelId) {
+        if (ZapretConfig.isReadDeletedMessagesEnabled()) {
+            return;
+        }
         getMessagesStorage().getStorageQueue().postRunnable(() -> {
             AndroidUtilities.runOnUIThread(() -> {
                 getNotificationCenter().postNotificationName(NotificationCenter.messagesDeleted, ids, channelId, false);
@@ -19635,6 +19645,7 @@ public class MessagesController extends BaseController implements NotificationCe
         LongSparseIntArray markAsReadMessagesOutboxFinal = markAsReadMessagesOutbox;
         LongSparseArray<ArrayList<Integer>> markContentAsReadMessagesFinal = markContentAsReadMessages;
         SparseIntArray markAsReadEncryptedFinal = markAsReadEncrypted;
+        deletedMessages = maybeSuppressDeletedMessages(deletedMessages);
         LongSparseArray<ArrayList<Integer>> deletedMessagesFinal = deletedMessages;
         LongSparseArray<ArrayList<Integer>> deletedQuickRepliesMessagesFinal = deletedQuickReplyMessages;
         LongSparseArray<ArrayList<Integer>> scheduledDeletedMessagesFinal = scheduledDeletedMessages;

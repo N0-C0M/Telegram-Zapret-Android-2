@@ -42,6 +42,7 @@ public final class ZapretConfig {
     private static final String KEY_WS_PROXY_ENABLED = "zapret_ws_proxy_enabled";
     private static final String KEY_WS_PROXY_IPV6_ENABLED = "zapret_ws_proxy_ipv6_enabled";
     private static final String KEY_WS_PROXY_NOTIFICATION_ENABLED = "zapret_ws_proxy_notification_enabled";
+    private static final String KEY_READ_DELETED_MESSAGES_ENABLED = "zapret_read_deleted_messages_enabled";
     private static final String KEY_LOCAL_VPN_ENABLED = "zapret_local_vpn_enabled";
     private static final String KEY_CALL_COMPATIBILITY_MODE = "zapret_call_compat_mode";
 
@@ -282,6 +283,15 @@ public final class ZapretConfig {
         notifyConfigChanged();
     }
 
+    public static boolean isReadDeletedMessagesEnabled() {
+        return getPreferences().getBoolean(KEY_READ_DELETED_MESSAGES_ENABLED, false);
+    }
+
+    public static void setReadDeletedMessagesEnabled(boolean enabled) {
+        getPreferences().edit().putBoolean(KEY_READ_DELETED_MESSAGES_ENABLED, enabled).apply();
+        notifyConfigChanged();
+    }
+
     public static boolean hasProxyEndpoint() {
         return !TextUtils.isEmpty(getProxyHost()) && getProxyPort() > 0;
     }
@@ -447,8 +457,15 @@ public final class ZapretConfig {
     }
 
     public static String getSettingsSummary() {
+        if (isWsProxyEnabled() && isReadDeletedMessagesEnabled()) {
+            return LocaleController.getString(R.string.ZapretWsProxyStandaloneShort) + " / " + getProxyEndpointLabel()
+                + " / " + LocaleController.getString(R.string.ZapretReadDeletedMessagesShort);
+        }
         if (isWsProxyEnabled()) {
             return LocaleController.getString(R.string.ZapretWsProxyStandaloneShort) + " / " + getProxyEndpointLabel();
+        }
+        if (isReadDeletedMessagesEnabled()) {
+            return LocaleController.getString(R.string.ZapretReadDeletedMessagesShort);
         }
         return LocaleController.getString(R.string.ZapretDisabled);
     }

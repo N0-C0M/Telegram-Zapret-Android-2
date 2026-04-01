@@ -38,6 +38,7 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
     private int wsProxyRow;
     private int wsProxyIpv6Row;
     private int wsProxyNotificationRow;
+    private int readDeletedMessagesRow;
     private int linksHeaderRow;
     private int telegramChannelRow;
     private int githubRow;
@@ -63,6 +64,7 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
         wsProxyRow = rowCount++;
         wsProxyIpv6Row = rowCount++;
         wsProxyNotificationRow = rowCount++;
+        readDeletedMessagesRow = rowCount++;
         linksHeaderRow = rowCount++;
         telegramChannelRow = rowCount++;
         githubRow = rowCount++;
@@ -106,6 +108,8 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
                 ZapretConfig.setWsProxyIpv6Enabled(!ZapretConfig.isWsProxyIpv6Enabled());
             } else if (position == wsProxyNotificationRow) {
                 ZapretConfig.setWsProxyNotificationEnabled(!ZapretConfig.isWsProxyNotificationEnabled());
+            } else if (position == readDeletedMessagesRow) {
+                ZapretConfig.setReadDeletedMessagesEnabled(!ZapretConfig.isReadDeletedMessagesEnabled());
             } else if (position == telegramChannelRow) {
                 if (getParentActivity() != null) {
                     Browser.openUrl(getParentActivity(), "https://t.me/xower_dev");
@@ -147,6 +151,7 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
             return position == wsProxyRow
                 || position == wsProxyIpv6Row
                 || position == wsProxyNotificationRow
+                || position == readDeletedMessagesRow
                 || position == telegramChannelRow
                 || position == githubRow;
         }
@@ -157,7 +162,7 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
                 return 0;
             } else if (position == generalHeaderRow || position == linksHeaderRow) {
                 return 2;
-            } else if (position == wsProxyRow || position == wsProxyIpv6Row || position == wsProxyNotificationRow) {
+            } else if (position == wsProxyRow || position == wsProxyIpv6Row || position == wsProxyNotificationRow || position == readDeletedMessagesRow) {
                 return 3;
             } else {
                 return 1;
@@ -218,13 +223,15 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
                 }
                 case 3: {
                     TextCheckCell checkCell = (TextCheckCell) holder.itemView;
-                    boolean needDivider = position != wsProxyNotificationRow;
+                    boolean needDivider = position != readDeletedMessagesRow;
                     if (position == wsProxyRow) {
                         checkCell.setTextAndCheck(LocaleController.getString(R.string.ZapretWsProxy), ZapretConfig.isWsProxyEnabled(), needDivider);
                     } else if (position == wsProxyIpv6Row) {
                         checkCell.setTextAndCheck(LocaleController.getString(R.string.ZapretWsProxyIpv6), ZapretConfig.isWsProxyIpv6Enabled(), needDivider);
                     } else if (position == wsProxyNotificationRow) {
                         checkCell.setTextAndCheck(LocaleController.getString(R.string.ZapretWsProxyNotification), ZapretConfig.isWsProxyNotificationEnabled(), needDivider);
+                    } else if (position == readDeletedMessagesRow) {
+                        checkCell.setTextAndCheck(LocaleController.getString(R.string.ZapretReadDeletedMessages), ZapretConfig.isReadDeletedMessagesEnabled(), needDivider);
                     }
                     break;
                 }
@@ -242,6 +249,8 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
                     cell.setChecked(ZapretConfig.isWsProxyIpv6Enabled());
                 } else if (position == wsProxyNotificationRow) {
                     cell.setChecked(ZapretConfig.isWsProxyNotificationEnabled());
+                } else if (position == readDeletedMessagesRow) {
+                    cell.setChecked(ZapretConfig.isReadDeletedMessagesEnabled());
                 }
             }
         }
