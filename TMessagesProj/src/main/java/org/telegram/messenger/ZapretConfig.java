@@ -39,6 +39,7 @@ public final class ZapretConfig {
     private static final String KEY_PROXY_PORT = "zapret_proxy_port";
     private static final String KEY_PROXY_USERNAME = "zapret_proxy_username";
     private static final String KEY_PROXY_PASSWORD = "zapret_proxy_password";
+    private static final String KEY_WS_PROXY_ENABLED = "zapret_ws_proxy_enabled";
     private static final String KEY_LOCAL_VPN_ENABLED = "zapret_local_vpn_enabled";
     private static final String KEY_CALL_COMPATIBILITY_MODE = "zapret_call_compat_mode";
 
@@ -248,12 +249,41 @@ public final class ZapretConfig {
         notifyConfigChanged();
     }
 
+    public static boolean isWsProxyEnabled() {
+        return getPreferences().getBoolean(KEY_WS_PROXY_ENABLED, true);
+    }
+
+    public static void setWsProxyEnabled(boolean enabled) {
+        getPreferences().edit().putBoolean(KEY_WS_PROXY_ENABLED, enabled).apply();
+        notifyConfigChanged();
+    }
+
     public static boolean hasProxyEndpoint() {
         return !TextUtils.isEmpty(getProxyHost()) && getProxyPort() > 0;
     }
 
     public static String getProxyEndpointLabel() {
         return getProxyHost() + ":" + getProxyPort();
+    }
+
+    public static boolean isLocalProxyEndpoint() {
+        String host = getProxyHost();
+        return "127.0.0.1".equals(host) || "localhost".equalsIgnoreCase(host);
+    }
+
+    public static boolean shouldUseLocalWsProxy() {
+        return isEnabled()
+            && isProxyRoutingEnabled()
+            && hasProxyEndpoint()
+            && isLocalProxyEndpoint()
+            && isWsProxyEnabled();
+    }
+
+    public static boolean shouldUseManagedProxyRouting() {
+        return isEnabled()
+            && isProxyRoutingEnabled()
+            && hasProxyEndpoint()
+            && (!isLocalProxyEndpoint() || isWsProxyEnabled());
     }
 
     public static String getProxyUsernameSummary() {

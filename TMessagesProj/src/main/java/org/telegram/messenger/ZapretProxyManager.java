@@ -305,16 +305,12 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
     }
 
     private boolean shouldManageProxy() {
-        return ZapretConfig.isEnabled()
-            && ZapretConfig.isProxyRoutingEnabled()
-            && ZapretConfig.hasProxyEndpoint()
+        return ZapretConfig.shouldUseManagedProxyRouting()
             && (ZapretConfig.appliesToMessages() || isCallScopeActive());
     }
 
     private boolean shouldPrimeForCall() {
-        return ZapretConfig.isEnabled()
-            && ZapretConfig.isProxyRoutingEnabled()
-            && ZapretConfig.hasProxyEndpoint()
+        return ZapretConfig.shouldUseManagedProxyRouting()
             && !ZapretConfig.appliesToMessages()
             && ZapretConfig.appliesToCalls();
     }

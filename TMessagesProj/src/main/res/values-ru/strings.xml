@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="AppName">Telegram</string>
-    <string name="AppNameBeta">Telegram Beta</string>
+    <string name="AppName">noTelegram</string>
+    <string name="AppNameBeta">noTelegram Beta</string>
     <string name="LanguageName">Русский</string>
     <string name="English">Английский</string>
     <string name="LanguageNameInEnglish">Russian</string>
@@ -263,7 +263,7 @@
     <string name="RemindTodayAt">\'Отправить сегодня в\' HH:mm</string>
     <string name="RemindDayAt">\'Отправить\' d MMM \'в\' HH:mm</string>
     <string name="RemindDayYearAt">\'Напомнить\' d MMM yyyy \'в\' HH:mm</string>
-    <string name="ZapretTitle">Zapret</string>
+    <string name="ZapretTitle">noMenu</string>
     <string name="ZapretGeneralSection">Общие</string>
     <string name="ZapretTestsSection">Тесты</string>
     <string name="ZapretLinksSection">Ссылки</string>
@@ -271,6 +271,7 @@
     <string name="ZapretGitHub">GitHub</string>
     <string name="ZapretCustomSection">Пользовательская конфигурация</string>
     <string name="ZapretEnabled">Включить zapret</string>
+    <string name="ZapretWsProxy">Use WS proxy</string>
     <string name="ZapretCallCompatibility">Режим совместимости звонков (TCP, без P2P)</string>
     <string name="ZapretConfigurationSource">Источник конфигурации</string>
     <string name="ZapretSourceBuiltIn">Встроенная</string>

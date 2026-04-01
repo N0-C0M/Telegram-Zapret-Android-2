@@ -82,11 +82,7 @@ public class ZapretWsProxyManager implements NotificationCenter.NotificationCent
     }
 
     private boolean shouldRunLocalWsProxy() {
-        if (!ZapretConfig.isEnabled() || !ZapretConfig.isProxyRoutingEnabled() || !ZapretConfig.hasProxyEndpoint()) {
-            return false;
-        }
-        String host = ZapretConfig.getProxyHost();
-        return "127.0.0.1".equals(host) || "localhost".equalsIgnoreCase(host);
+        return ZapretConfig.shouldUseLocalWsProxy();
     }
 
     private void runOnUiThread(Runnable runnable) {

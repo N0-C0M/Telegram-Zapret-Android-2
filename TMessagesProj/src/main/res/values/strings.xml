@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="AppName">Telegram</string>
-    <string name="AppNameBeta">Telegram Beta</string>
+    <string name="AppName">noTelegram</string>
+    <string name="AppNameBeta">noTelegram Beta</string>
     <string name="LanguageName">English</string>
     <string name="English">English</string>
     <string name="LanguageNameInEnglish">English</string>
@@ -9820,7 +9820,7 @@
     <string name="DateOfBirthHideYear">Hide Year</string>
     <string name="DateOfBirthAddToProfile">Add to My Profile</string>
     <string name="SuggestedDateOfBirthView">View</string>
-    <string name="ZapretTitle">Zapret</string>
+    <string name="ZapretTitle">noMenu</string>
     <string name="ZapretGeneralSection">General</string>
     <string name="ZapretTestsSection">Tests</string>
     <string name="ZapretLinksSection">Links</string>
@@ -9828,6 +9828,7 @@
     <string name="ZapretGitHub">GitHub</string>
     <string name="ZapretCustomSection">Custom Configuration</string>
     <string name="ZapretEnabled">Enable zapret</string>
+    <string name="ZapretWsProxy">Use WS proxy</string>
     <string name="ZapretCallCompatibility">Call compatibility mode (TCP, no P2P)</string>
     <string name="ZapretConfigurationSource">Configuration Source</string>
     <string name="ZapretSourceBuiltIn">Built-in</string>
