@@ -116,6 +116,7 @@ import org.telegram.messenger.StatsController;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
+import org.telegram.messenger.SerenadaCallRelay;
 import org.telegram.messenger.ZapretConfig;
 import org.telegram.messenger.ZapretProxyManager;
 import org.telegram.messenger.XiaomiUtilities;
@@ -1050,6 +1051,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 			systemCallConnection.setDialing();
 		}
 		ZapretProxyManager.prepareForCallRouting();
+		SerenadaCallRelay.prepareForCallRouting();
 		configureDeviceForCall();
 		showNotification();
 		startConnectingSound();
@@ -1099,7 +1101,8 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 				reqCall.protocol = new TL_phone.TL_phoneCallProtocol();
 				reqCall.video = videoCall;
 				final boolean zapretCallCompatibilityMode = ZapretConfig.shouldHardenCallsOverProxy();
-				reqCall.protocol.udp_p2p = !zapretCallCompatibilityMode;
+				final boolean serenadaCallRelayEnabled = SerenadaCallRelay.isEnabled();
+				reqCall.protocol.udp_p2p = !zapretCallCompatibilityMode && !serenadaCallRelayEnabled;
 				reqCall.protocol.udp_reflector = true;
 				reqCall.protocol.min_layer = CALL_MIN_LAYER;
 				reqCall.protocol.max_layer = Instance.getConnectionMaxLayer();
@@ -1826,6 +1829,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 	}
 
 	private void processAcceptedCall() {
+		SerenadaCallRelay.prepareForCallRouting();
 		dispatchStateChanged(STATE_EXCHANGING_KEYS);
 		BigInteger p = new BigInteger(1, MessagesStorage.getInstance(currentAccount).getSecretPBytes());
 		BigInteger i_authKey = new BigInteger(1, privateCall.g_b);
@@ -1869,7 +1873,8 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 		req.protocol.max_layer = Instance.getConnectionMaxLayer();
 		req.protocol.min_layer = CALL_MIN_LAYER;
 		final boolean zapretCallCompatibilityMode = ZapretConfig.shouldHardenCallsOverProxy();
-		req.protocol.udp_p2p = !zapretCallCompatibilityMode;
+		final boolean serenadaCallRelayEnabled = SerenadaCallRelay.isEnabled();
+		req.protocol.udp_p2p = !zapretCallCompatibilityMode && !serenadaCallRelayEnabled;
 		req.protocol.udp_reflector = true;
 		Collections.addAll(req.protocol.library_versions, NativeInstance.getAllVersions());
 		ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
@@ -3416,33 +3421,62 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 			final String logFilePath = BuildVars.DEBUG_VERSION ? VoIPHelper.getLogFilePath("voip" + privateCall.id) : VoIPHelper.getLogFilePath("" + privateCall.id, false);
 			final String statsLogFilePath = VoIPHelper.getLogFilePath("" + privateCall.id, true);
 			final boolean zapretCallCompatibilityMode = ZapretConfig.shouldHardenCallsOverProxy();
-			final Instance.Config config = new Instance.Config(initializationTimeout, receiveTimeout, voipDataSaving, zapretCallCompatibilityMode ? false : privateCall.p2p_allowed, enableAec, enableNs, true, false, serverConfig.enableStunMarking, logFilePath, statsLogFilePath, privateCall.protocol.max_layer, privateCall.custom_parameters == null ? "" : privateCall.custom_parameters.data);
+			final SerenadaCallRelay.Credentials serenadaCredentials = SerenadaCallRelay.getCredentialsForCall();
+			final boolean serenadaRelayActive = serenadaCredentials != null && !serenadaCredentials.endpoints.isEmpty();
+			final boolean disableP2p = zapretCallCompatibilityMode || serenadaRelayActive;
+			final Instance.Config config = new Instance.Config(initializationTimeout, receiveTimeout, voipDataSaving, disableP2p ? false : privateCall.p2p_allowed, enableAec, enableNs, true, false, serverConfig.enableStunMarking, logFilePath, statsLogFilePath, privateCall.protocol.max_layer, privateCall.custom_parameters == null ? "" : privateCall.custom_parameters.data);
 			lastLogFilePath = logFilePath;
 
 			// persistent state
 			final String persistentStateFilePath = new File(ApplicationLoader.applicationContext.getCacheDir(), "voip_persistent_state.json").getAbsolutePath();
 
 			// endpoints
-			final boolean forceTcp = preferences.getBoolean("dbg_force_tcp_in_calls", false) || zapretCallCompatibilityMode;
+			final boolean forceTcp = !serenadaRelayActive && (preferences.getBoolean("dbg_force_tcp_in_calls", false) || zapretCallCompatibilityMode);
 			final boolean localVpnMode = ZapretConfig.shouldUseLocalVpn();
 			final int endpointType = forceTcp ? Instance.ENDPOINT_TYPE_TCP_RELAY : Instance.ENDPOINT_TYPE_UDP_RELAY;
-			final Instance.Endpoint[] endpoints = new Instance.Endpoint[privateCall.connections.size()];
-			ArrayList<Long> reflectorIds = new ArrayList<>();
-			for (int i = 0; i < endpoints.length; i++) {
-				final TLRPC.PhoneConnection connection = privateCall.connections.get(i);
-				endpoints[i] = new Instance.Endpoint(connection instanceof TLRPC.TL_phoneConnectionWebrtc, connection.id, connection.ip, localVpnMode ? "" : connection.ipv6, connection.port, endpointType, connection.peer_tag, connection.turn, connection.stun, connection.username, connection.password, connection.tcp);
-				if (connection instanceof TLRPC.TL_phoneConnection) {
-					reflectorIds.add(((TLRPC.TL_phoneConnection) connection).id);
+			final Instance.Endpoint[] endpoints;
+			if (serenadaRelayActive) {
+				endpoints = new Instance.Endpoint[serenadaCredentials.endpoints.size()];
+				for (int i = 0; i < serenadaCredentials.endpoints.size(); i++) {
+					SerenadaCallRelay.Endpoint relayEndpoint = serenadaCredentials.endpoints.get(i);
+					endpoints[i] = new Instance.Endpoint(
+						true,
+						i + 1L,
+						relayEndpoint.host,
+						"",
+						relayEndpoint.port,
+						Instance.ENDPOINT_TYPE_UDP_RELAY,
+						null,
+						true,
+						false,
+						serenadaCredentials.username,
+						serenadaCredentials.password,
+						false
+					);
+					endpoints[i].reflectorId = i + 1;
 				}
-			}
-			if (!reflectorIds.isEmpty()) {
-				Collections.sort(reflectorIds);
-				HashMap<Long, Integer> reflectorIdMapping = new HashMap<>();
-				for (int i = 0; i < reflectorIds.size(); i++) {
-					reflectorIdMapping.put(reflectorIds.get(i), i + 1);
+				if (BuildVars.LOGS_ENABLED) {
+					FileLog.d("serenada relay active for call " + privateCall.id + ", endpoints=" + endpoints.length);
 				}
+			} else {
+				endpoints = new Instance.Endpoint[privateCall.connections.size()];
+				ArrayList<Long> reflectorIds = new ArrayList<>();
 				for (int i = 0; i < endpoints.length; i++) {
-					endpoints[i].reflectorId = reflectorIdMapping.getOrDefault(endpoints[i].id, 0);
+					final TLRPC.PhoneConnection connection = privateCall.connections.get(i);
+					endpoints[i] = new Instance.Endpoint(connection instanceof TLRPC.TL_phoneConnectionWebrtc, connection.id, connection.ip, localVpnMode ? "" : connection.ipv6, connection.port, endpointType, connection.peer_tag, connection.turn, connection.stun, connection.username, connection.password, connection.tcp);
+					if (connection instanceof TLRPC.TL_phoneConnection) {
+						reflectorIds.add(((TLRPC.TL_phoneConnection) connection).id);
+					}
+				}
+				if (!reflectorIds.isEmpty()) {
+					Collections.sort(reflectorIds);
+					HashMap<Long, Integer> reflectorIdMapping = new HashMap<>();
+					for (int i = 0; i < reflectorIds.size(); i++) {
+						reflectorIdMapping.put(reflectorIds.get(i), i + 1);
+					}
+					for (int i = 0; i < endpoints.length; i++) {
+						endpoints[i].reflectorId = reflectorIdMapping.getOrDefault(endpoints[i].id, 0);
+					}
 				}
 			}
 			if (forceTcp) {
@@ -3451,7 +3485,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 
 			// proxy
 			Instance.Proxy proxy = null;
-			if (preferences.getBoolean("proxy_enabled", false) && preferences.getBoolean("proxy_enabled_calls", false)) {
+			if (!serenadaRelayActive && preferences.getBoolean("proxy_enabled", false) && preferences.getBoolean("proxy_enabled_calls", false)) {
 				final String server = preferences.getString("proxy_ip", null);
 				final String secret = preferences.getString("proxy_secret", null);
 				if (!TextUtils.isEmpty(server) && TextUtils.isEmpty(secret)) {
