@@ -274,7 +274,7 @@ public final class ZapretConfig {
     }
 
     public static boolean isWsProxyNotificationEnabled() {
-        return getPreferences().getBoolean(KEY_WS_PROXY_NOTIFICATION_ENABLED, true);
+        return getPreferences().getBoolean(KEY_WS_PROXY_NOTIFICATION_ENABLED, false);
     }
 
     public static void setWsProxyNotificationEnabled(boolean enabled) {
@@ -447,13 +447,10 @@ public final class ZapretConfig {
     }
 
     public static String getSettingsSummary() {
-        if (shouldUseStandaloneWsProxyRouting()) {
+        if (isWsProxyEnabled()) {
             return LocaleController.getString(R.string.ZapretWsProxyStandaloneShort) + " / " + getProxyEndpointLabel();
         }
-        if (!isEnabled()) {
-            return LocaleController.getString(R.string.ZapretDisabled);
-        }
-        return getSelectedStrategyTitle() + " / " + LocaleController.getString(R.string.ZapretTelegramOnlyNativeShort);
+        return LocaleController.getString(R.string.ZapretDisabled);
     }
 
     public static String getInfoText() {

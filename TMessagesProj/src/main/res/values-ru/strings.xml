@@ -403,6 +403,6 @@
     <string name="ZapretProxyCoverageMessages">сообщений и медиа</string>
     <string name="ZapretProxyCoverageAll">всего трафика Telegram</string>
     <string name="ZapretWelcomeChannelTitle">Наш ТГК</string>
-    <string name="ZapretWelcomeChannelText">Обновления и сборки публикуются в t.me/xower_dev.</string>
-    <string name="ZapretWelcomeChannelButton">Открыть</string>
+    <string name="ZapretWelcomeChannelText">Версия форка: %1$s\nТГК: %2$s</string>
+    <string name="ZapretWelcomeChannelButton">Продолжить</string>
 </resources>

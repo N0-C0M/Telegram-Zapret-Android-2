@@ -255,7 +255,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     public static Runnable onResumeStaticCallback;
 
     private static final String EXTRA_ACTION_TOKEN = "actions.fulfillment.extra.ACTION_TOKEN";
-    private static final String KEY_WELCOME_CHANNEL_BULLETIN_SHOWN = "welcome_channel_bulletin_shown";
+    private static final String KEY_WELCOME_FORK_INFO_DIALOG_SHOWN = "welcome_fork_info_dialog_shown_v2";
     public ArrayList<INavigationLayout> sheetFragmentsStack = new ArrayList<>();
 
     private boolean finished;
@@ -347,7 +347,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     private AlertDialog loadingThemeProgressDialog;
 
     private boolean isNavigationBarColorFrozen = false;
-    private boolean welcomeChannelBulletinScheduled;
+    private boolean welcomeForkInfoDialogScheduled;
 
     private boolean navigateToPremiumBot;
     private Runnable navigateToPremiumGiftCallback;
@@ -6187,19 +6187,19 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         return null;
     }
 
-    private void maybeShowWelcomeChannelBulletin() {
+    private void maybeShowWelcomeForkInfoDialog() {
         SharedPreferences preferences = MessagesController.getGlobalMainSettings();
-        if (welcomeChannelBulletinScheduled || preferences.getBoolean(KEY_WELCOME_CHANNEL_BULLETIN_SHOWN, false)) {
+        if (welcomeForkInfoDialogScheduled || preferences.getBoolean(KEY_WELCOME_FORK_INFO_DIALOG_SHOWN, false)) {
             return;
         }
-        welcomeChannelBulletinScheduled = true;
+        welcomeForkInfoDialogScheduled = true;
         AndroidUtilities.runOnUIThread(() -> {
-            welcomeChannelBulletinScheduled = false;
+            welcomeForkInfoDialogScheduled = false;
             if (isFinishing() || !isResumed) {
                 return;
             }
             SharedPreferences prefs = MessagesController.getGlobalMainSettings();
-            if (prefs.getBoolean(KEY_WELCOME_CHANNEL_BULLETIN_SHOWN, false)) {
+            if (prefs.getBoolean(KEY_WELCOME_FORK_INFO_DIALOG_SHOWN, false)) {
                 return;
             }
             if (passcodeDialog != null && passcodeDialog.passcodeView.getVisibility() == View.VISIBLE) {
@@ -6208,28 +6208,28 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             if (getVisibleDialog() != null) {
                 return;
             }
-            Runnable openChannel = () -> Browser.openUrl(LaunchActivity.this, "https://t.me/xower_dev");
-            Bulletin bulletin;
-            BaseFragment topFragment = getTopBulletinFragment();
-            if (BulletinFactory.canShowBulletin(topFragment)) {
-                bulletin = BulletinFactory.of(topFragment).createSimpleBulletin(
-                    R.raw.chats_infotip,
-                    LocaleController.getString(R.string.ZapretWelcomeChannelTitle),
-                    LocaleController.getString(R.string.ZapretWelcomeChannelText),
-                    LocaleController.getString(R.string.ZapretWelcomeChannelButton),
-                    openChannel
+            String buildVersion = BuildVars.BUILD_VERSION_STRING != null ? BuildVars.BUILD_VERSION_STRING : "unknown";
+            try {
+                AlertDialog.Builder builder = new AlertDialog.Builder(LaunchActivity.this);
+                builder.setTitle(LocaleController.getString(R.string.AppName));
+                builder.setMessage(LocaleController.formatString(
+                    "ZapretWelcomeChannelText",
+                    R.string.ZapretWelcomeChannelText,
+                    buildVersion,
+                    "t.me/xower_dev"
+                ));
+                builder.setPositiveButton(LocaleController.getString(R.string.ZapretWelcomeChannelButton), (dialogInterface, which) ->
+                    prefs.edit().putBoolean(KEY_WELCOME_FORK_INFO_DIALOG_SHOWN, true).apply()
                 );
-            } else {
-                bulletin = BulletinFactory.of(Bulletin.BulletinWindow.make(LaunchActivity.this), null).createSimpleBulletin(
-                    R.raw.chats_infotip,
-                    LocaleController.getString(R.string.ZapretWelcomeChannelTitle),
-                    LocaleController.getString(R.string.ZapretWelcomeChannelText),
-                    LocaleController.getString(R.string.ZapretWelcomeChannelButton),
-                    openChannel
-                );
+                AlertDialog dialog = builder.create();
+                dialog.setCancelable(false);
+                dialog.setCanceledOnTouchOutside(false);
+                dialog.setOnDismissListener(d -> visibleDialogs.remove(dialog));
+                dialog.show();
+                visibleDialogs.add(dialog);
+            } catch (Exception e) {
+                FileLog.e(e);
             }
-            prefs.edit().putBoolean(KEY_WELCOME_CHANNEL_BULLETIN_SHOWN, true).apply();
-            bulletin.show();
         }, 800L);
     }
 
@@ -7066,7 +7066,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             whenResumed.run();
             whenResumed = null;
         }
-        maybeShowWelcomeChannelBulletin();
+        maybeShowWelcomeForkInfoDialog();
     }
 
     public static Runnable whenResumed;

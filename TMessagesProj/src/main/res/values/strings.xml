@@ -9951,8 +9951,8 @@
     <string name="ZapretProxyCoverageMessages">messages and media</string>
     <string name="ZapretProxyCoverageAll">all Telegram traffic</string>
     <string name="ZapretWelcomeChannelTitle">Project channel</string>
-    <string name="ZapretWelcomeChannelText">Updates and builds are posted in t.me/xower_dev.</string>
-    <string name="ZapretWelcomeChannelButton">Open</string>
+    <string name="ZapretWelcomeChannelText">Fork version: %1$s\nChannel: %2$s</string>
+    <string name="ZapretWelcomeChannelButton">Continue</string>
     <string name="ZapretDebugLogEmpty">No debug events yet.</string>
     <string name="ZapretDebugRotationDisabled">Disabled</string>
     <string name="ZapretDebugRotationIdle">Not rotating</string>
