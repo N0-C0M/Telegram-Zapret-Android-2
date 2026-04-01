@@ -255,6 +255,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     public static Runnable onResumeStaticCallback;
 
     private static final String EXTRA_ACTION_TOKEN = "actions.fulfillment.extra.ACTION_TOKEN";
+    private static final String KEY_WELCOME_CHANNEL_BULLETIN_SHOWN = "welcome_channel_bulletin_shown";
     public ArrayList<INavigationLayout> sheetFragmentsStack = new ArrayList<>();
 
     private boolean finished;
@@ -346,6 +347,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     private AlertDialog loadingThemeProgressDialog;
 
     private boolean isNavigationBarColorFrozen = false;
+    private boolean welcomeChannelBulletinScheduled;
 
     private boolean navigateToPremiumBot;
     private Runnable navigateToPremiumGiftCallback;
@@ -6168,17 +6170,67 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     }
 
     public void showBulletin(Function<BulletinFactory, Bulletin> createBulletin) {
-        BaseFragment topFragment = null;
-        if (!layerFragmentsStack.isEmpty()) {
-            topFragment = layerFragmentsStack.get(layerFragmentsStack.size() - 1);
-        } else if (!rightFragmentsStack.isEmpty()) {
-            topFragment = rightFragmentsStack.get(rightFragmentsStack.size() - 1);
-        } else if (!mainFragmentsStack.isEmpty()) {
-            topFragment = mainFragmentsStack.get(mainFragmentsStack.size() - 1);
-        }
+        BaseFragment topFragment = getTopBulletinFragment();
         if (BulletinFactory.canShowBulletin(topFragment)) {
             createBulletin.apply(BulletinFactory.of(topFragment)).show();
         }
+    }
+
+    private BaseFragment getTopBulletinFragment() {
+        if (!layerFragmentsStack.isEmpty()) {
+            return layerFragmentsStack.get(layerFragmentsStack.size() - 1);
+        } else if (!rightFragmentsStack.isEmpty()) {
+            return rightFragmentsStack.get(rightFragmentsStack.size() - 1);
+        } else if (!mainFragmentsStack.isEmpty()) {
+            return mainFragmentsStack.get(mainFragmentsStack.size() - 1);
+        }
+        return null;
+    }
+
+    private void maybeShowWelcomeChannelBulletin() {
+        SharedPreferences preferences = MessagesController.getGlobalMainSettings();
+        if (welcomeChannelBulletinScheduled || preferences.getBoolean(KEY_WELCOME_CHANNEL_BULLETIN_SHOWN, false)) {
+            return;
+        }
+        welcomeChannelBulletinScheduled = true;
+        AndroidUtilities.runOnUIThread(() -> {
+            welcomeChannelBulletinScheduled = false;
+            if (isFinishing() || !isResumed) {
+                return;
+            }
+            SharedPreferences prefs = MessagesController.getGlobalMainSettings();
+            if (prefs.getBoolean(KEY_WELCOME_CHANNEL_BULLETIN_SHOWN, false)) {
+                return;
+            }
+            if (passcodeDialog != null && passcodeDialog.passcodeView.getVisibility() == View.VISIBLE) {
+                return;
+            }
+            if (getVisibleDialog() != null) {
+                return;
+            }
+            Runnable openChannel = () -> Browser.openUrl(LaunchActivity.this, "https://t.me/xower_dev");
+            Bulletin bulletin;
+            BaseFragment topFragment = getTopBulletinFragment();
+            if (BulletinFactory.canShowBulletin(topFragment)) {
+                bulletin = BulletinFactory.of(topFragment).createSimpleBulletin(
+                    R.raw.chats_infotip,
+                    LocaleController.getString(R.string.ZapretWelcomeChannelTitle),
+                    LocaleController.getString(R.string.ZapretWelcomeChannelText),
+                    LocaleController.getString(R.string.ZapretWelcomeChannelButton),
+                    openChannel
+                );
+            } else {
+                bulletin = BulletinFactory.of(Bulletin.BulletinWindow.make(LaunchActivity.this), null).createSimpleBulletin(
+                    R.raw.chats_infotip,
+                    LocaleController.getString(R.string.ZapretWelcomeChannelTitle),
+                    LocaleController.getString(R.string.ZapretWelcomeChannelText),
+                    LocaleController.getString(R.string.ZapretWelcomeChannelButton),
+                    openChannel
+                );
+            }
+            prefs.edit().putBoolean(KEY_WELCOME_CHANNEL_BULLETIN_SHOWN, true).apply();
+            bulletin.show();
+        }, 800L);
     }
 
     public void setNavigateToPremiumBot(boolean val) {
@@ -7014,6 +7066,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             whenResumed.run();
             whenResumed = null;
         }
+        maybeShowWelcomeChannelBulletin();
     }
 
     public static Runnable whenResumed;

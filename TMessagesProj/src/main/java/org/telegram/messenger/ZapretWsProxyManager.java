@@ -58,6 +58,7 @@ public class ZapretWsProxyManager implements NotificationCenter.NotificationCent
             true,
             false,
             ZapretConfig.isWsProxyIpv6Enabled(),
+            ZapretConfig.isWsProxyNotificationEnabled(),
             true,
             25
         );

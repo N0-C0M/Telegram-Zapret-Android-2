@@ -273,6 +273,8 @@
     <string name="ZapretEnabled">Включить zapret</string>
     <string name="ZapretWsProxy">Use WS proxy</string>
     <string name="ZapretWsProxyIpv6">Использовать IPv6 в WS proxy</string>
+    <string name="ZapretWsProxyNotification">Показывать уведомление WS proxy</string>
+    <string name="ZapretWsProxyStandaloneShort">WS proxy</string>
     <string name="ZapretCallCompatibility">Режим совместимости звонков (TCP, без P2P)</string>
     <string name="ZapretConfigurationSource">Источник конфигурации</string>
     <string name="ZapretSourceBuiltIn">Встроенная</string>
@@ -400,4 +402,7 @@
     <string name="ZapretDebugBackendProxyCallsFallback">SOCKS5 %1$s активен для всего трафика Telegram, потому что клиент не умеет проксировать только звонки отдельно.</string>
     <string name="ZapretProxyCoverageMessages">сообщений и медиа</string>
     <string name="ZapretProxyCoverageAll">всего трафика Telegram</string>
+    <string name="ZapretWelcomeChannelTitle">Наш ТГК</string>
+    <string name="ZapretWelcomeChannelText">Обновления и сборки публикуются в t.me/xower_dev.</string>
+    <string name="ZapretWelcomeChannelButton">Открыть</string>
 </resources>

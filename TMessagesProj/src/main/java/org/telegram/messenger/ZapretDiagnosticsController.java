@@ -128,6 +128,9 @@ public class ZapretDiagnosticsController implements NotificationCenter.Notificat
 
     public String getRuntimeSummary() {
         if (!ZapretConfig.isEnabled()) {
+            if (ZapretConfig.shouldUseStandaloneWsProxyRouting()) {
+                return ZapretProxyManager.getInstance().getRuntimeSummary();
+            }
             return LocaleController.getString(R.string.ZapretDebugBackendNativeDisabled);
         }
         return LocaleController.formatString("ZapretDebugBackendNativeActive", R.string.ZapretDebugBackendNativeActive, ZapretConfig.getActiveConfigDisplayName());

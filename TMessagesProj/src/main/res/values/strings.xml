@@ -9830,6 +9830,8 @@
     <string name="ZapretEnabled">Enable zapret</string>
     <string name="ZapretWsProxy">Use WS proxy</string>
     <string name="ZapretWsProxyIpv6">Use IPv6 in WS proxy</string>
+    <string name="ZapretWsProxyNotification">Show WS proxy notification</string>
+    <string name="ZapretWsProxyStandaloneShort">WS proxy</string>
     <string name="ZapretCallCompatibility">Call compatibility mode (TCP, no P2P)</string>
     <string name="ZapretConfigurationSource">Configuration Source</string>
     <string name="ZapretSourceBuiltIn">Built-in</string>
@@ -9948,6 +9950,9 @@
     <string name="ZapretDebugBackendProxyCallsFallback">SOCKS5 %1$s is active for all Telegram traffic because Telegram cannot proxy calls separately.</string>
     <string name="ZapretProxyCoverageMessages">messages and media</string>
     <string name="ZapretProxyCoverageAll">all Telegram traffic</string>
+    <string name="ZapretWelcomeChannelTitle">Project channel</string>
+    <string name="ZapretWelcomeChannelText">Updates and builds are posted in t.me/xower_dev.</string>
+    <string name="ZapretWelcomeChannelButton">Open</string>
     <string name="ZapretDebugLogEmpty">No debug events yet.</string>
     <string name="ZapretDebugRotationDisabled">Disabled</string>
     <string name="ZapretDebugRotationIdle">Not rotating</string>

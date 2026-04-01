@@ -41,6 +41,7 @@ public final class ZapretConfig {
     private static final String KEY_PROXY_PASSWORD = "zapret_proxy_password";
     private static final String KEY_WS_PROXY_ENABLED = "zapret_ws_proxy_enabled";
     private static final String KEY_WS_PROXY_IPV6_ENABLED = "zapret_ws_proxy_ipv6_enabled";
+    private static final String KEY_WS_PROXY_NOTIFICATION_ENABLED = "zapret_ws_proxy_notification_enabled";
     private static final String KEY_LOCAL_VPN_ENABLED = "zapret_local_vpn_enabled";
     private static final String KEY_CALL_COMPATIBILITY_MODE = "zapret_call_compat_mode";
 
@@ -251,7 +252,11 @@ public final class ZapretConfig {
     }
 
     public static boolean isWsProxyEnabled() {
-        return getPreferences().getBoolean(KEY_WS_PROXY_ENABLED, true);
+        SharedPreferences preferences = getPreferences();
+        if (preferences.contains(KEY_WS_PROXY_ENABLED)) {
+            return preferences.getBoolean(KEY_WS_PROXY_ENABLED, true);
+        }
+        return isEnabled();
     }
 
     public static void setWsProxyEnabled(boolean enabled) {
@@ -265,6 +270,15 @@ public final class ZapretConfig {
 
     public static void setWsProxyIpv6Enabled(boolean enabled) {
         getPreferences().edit().putBoolean(KEY_WS_PROXY_IPV6_ENABLED, enabled).apply();
+        notifyConfigChanged();
+    }
+
+    public static boolean isWsProxyNotificationEnabled() {
+        return getPreferences().getBoolean(KEY_WS_PROXY_NOTIFICATION_ENABLED, true);
+    }
+
+    public static void setWsProxyNotificationEnabled(boolean enabled) {
+        getPreferences().edit().putBoolean(KEY_WS_PROXY_NOTIFICATION_ENABLED, enabled).apply();
         notifyConfigChanged();
     }
 
@@ -282,14 +296,20 @@ public final class ZapretConfig {
     }
 
     public static boolean shouldUseLocalWsProxy() {
-        return isEnabled()
-            && isProxyRoutingEnabled()
+        return isProxyRoutingEnabled()
             && hasProxyEndpoint()
             && isLocalProxyEndpoint()
             && isWsProxyEnabled();
     }
 
+    public static boolean shouldUseStandaloneWsProxyRouting() {
+        return !isEnabled() && shouldUseLocalWsProxy();
+    }
+
     public static boolean shouldUseManagedProxyRouting() {
+        if (shouldUseLocalWsProxy()) {
+            return true;
+        }
         return isEnabled()
             && isProxyRoutingEnabled()
             && hasProxyEndpoint()
@@ -427,6 +447,9 @@ public final class ZapretConfig {
     }
 
     public static String getSettingsSummary() {
+        if (shouldUseStandaloneWsProxyRouting()) {
+            return LocaleController.getString(R.string.ZapretWsProxyStandaloneShort) + " / " + getProxyEndpointLabel();
+        }
         if (!isEnabled()) {
             return LocaleController.getString(R.string.ZapretDisabled);
         }

@@ -32,6 +32,7 @@ data class ProxyConfig(
     val loggingEnabled: Boolean = true,
     val verbose: Boolean = false,
     val allowIpv6: Boolean = true,
+    val showNotification: Boolean = true,
     val keepAlive: Boolean = true,
     val keepAliveIntervalSec: Int = 25
 ) {
@@ -42,6 +43,7 @@ data class ProxyConfig(
         obj.put("logging_enabled", loggingEnabled)
         obj.put("verbose", verbose)
         obj.put("allow_ipv6", allowIpv6)
+        obj.put("show_notification", showNotification)
         obj.put("keep_alive", keepAlive)
         obj.put("keep_alive_interval", keepAliveIntervalSec)
         obj.put("dc_ip", JSONArray(dcIp))
@@ -74,6 +76,7 @@ data class ProxyConfig(
                     loggingEnabled = obj.optBoolean("logging_enabled", true),
                     verbose = obj.optBoolean("verbose", false),
                     allowIpv6 = obj.optBoolean("allow_ipv6", true),
+                    showNotification = obj.optBoolean("show_notification", true),
                     keepAlive = obj.optBoolean("keep_alive", true),
                     keepAliveIntervalSec = obj.optInt("keep_alive_interval", 25)
                 )

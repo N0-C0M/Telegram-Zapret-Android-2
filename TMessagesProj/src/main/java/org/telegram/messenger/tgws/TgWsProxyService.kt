@@ -18,6 +18,7 @@ import org.telegram.ui.LaunchActivity
 
 class TgWsProxyService : Service() {
     private var engine: ProxyEngine? = null
+    private var currentConfig: ProxyConfig? = null
     private lateinit var repo: ConfigRepository
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
@@ -35,9 +36,9 @@ class TgWsProxyService : Service() {
                 val merged = config.withMergedDcList()
                 repo.save(merged)
                 repo.setShouldRun(true)
-                startForeground(NOTIF_ID, buildNotification(merged))
+                applyForegroundState(merged)
                 acquireLocks()
-                startEngine(merged)
+                startOrReloadEngine(merged)
                 TgWsProxyController.updateRunning(true)
             }
             ACTION_STOP -> {
@@ -55,9 +56,9 @@ class TgWsProxyService : Service() {
                     if (merged != config) {
                         repo.save(merged)
                     }
-                    startForeground(NOTIF_ID, buildNotification(merged))
+                    applyForegroundState(merged)
                     acquireLocks()
-                    startEngine(merged)
+                    startOrReloadEngine(merged)
                     TgWsProxyController.updateRunning(true)
                 } else {
                     stopSelf()
@@ -77,7 +78,6 @@ class TgWsProxyService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun startEngine(config: ProxyConfig) {
-        if (engine?.isRunning == true) return
         AppLogger.init(
             context = applicationContext,
             verbose = config.verbose,
@@ -85,11 +85,23 @@ class TgWsProxyService : Service() {
         )
         engine = ProxyEngine()
         engine?.start(config)
+        currentConfig = config
+    }
+
+    private fun startOrReloadEngine(config: ProxyConfig) {
+        val previousConfig = currentConfig
+        if (engine?.isRunning == true && previousConfig != null && normalizeForEngine(previousConfig) == normalizeForEngine(config)) {
+            currentConfig = config
+            return
+        }
+        stopEngine()
+        startEngine(config)
     }
 
     private fun stopEngine() {
         engine?.stop()
         engine = null
+        currentConfig = null
     }
 
     private fun acquireLocks() {
@@ -152,6 +164,21 @@ class TgWsProxyService : Service() {
             .setOngoing(true)
             .addAction(0, "Stop", stopPending)
             .build()
+    }
+
+    private fun applyForegroundState(config: ProxyConfig) {
+        if (config.showNotification) {
+            startForeground(NOTIF_ID, buildNotification(config))
+            return
+        }
+        startForeground(NOTIF_ID, buildNotification(config))
+        stopForegroundCompat()
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.cancel(NOTIF_ID)
+    }
+
+    private fun normalizeForEngine(config: ProxyConfig): ProxyConfig {
+        return config.copy(showNotification = true)
     }
 
     private fun createNotificationChannel() {
