@@ -272,6 +272,7 @@
     <string name="ZapretCustomSection">Пользовательская конфигурация</string>
     <string name="ZapretEnabled">Включить zapret</string>
     <string name="ZapretWsProxy">Use WS proxy</string>
+    <string name="ZapretWsProxyIpv6">Использовать IPv6 в WS proxy</string>
     <string name="ZapretCallCompatibility">Режим совместимости звонков (TCP, без P2P)</string>
     <string name="ZapretConfigurationSource">Источник конфигурации</string>
     <string name="ZapretSourceBuiltIn">Встроенная</string>

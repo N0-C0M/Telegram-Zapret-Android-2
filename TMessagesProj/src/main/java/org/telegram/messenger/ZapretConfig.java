@@ -40,6 +40,7 @@ public final class ZapretConfig {
     private static final String KEY_PROXY_USERNAME = "zapret_proxy_username";
     private static final String KEY_PROXY_PASSWORD = "zapret_proxy_password";
     private static final String KEY_WS_PROXY_ENABLED = "zapret_ws_proxy_enabled";
+    private static final String KEY_WS_PROXY_IPV6_ENABLED = "zapret_ws_proxy_ipv6_enabled";
     private static final String KEY_LOCAL_VPN_ENABLED = "zapret_local_vpn_enabled";
     private static final String KEY_CALL_COMPATIBILITY_MODE = "zapret_call_compat_mode";
 
@@ -255,6 +256,15 @@ public final class ZapretConfig {
 
     public static void setWsProxyEnabled(boolean enabled) {
         getPreferences().edit().putBoolean(KEY_WS_PROXY_ENABLED, enabled).apply();
+        notifyConfigChanged();
+    }
+
+    public static boolean isWsProxyIpv6Enabled() {
+        return getPreferences().getBoolean(KEY_WS_PROXY_IPV6_ENABLED, true);
+    }
+
+    public static void setWsProxyIpv6Enabled(boolean enabled) {
+        getPreferences().edit().putBoolean(KEY_WS_PROXY_IPV6_ENABLED, enabled).apply();
         notifyConfigChanged();
     }
 

@@ -57,6 +57,7 @@ public class ZapretWsProxyManager implements NotificationCenter.NotificationCent
             ProxyConfig.Companion.defaultDcList(),
             true,
             false,
+            ZapretConfig.isWsProxyIpv6Enabled(),
             true,
             25
         );

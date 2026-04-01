@@ -39,6 +39,8 @@ class ProxyEngine {
     private val ipv6BlockDurationMs = 10 * 60 * 1000L
     @Volatile
     private var ipv6BlockedUntilMs: Long = 0L
+    @Volatile
+    private var allowIpv6: Boolean = true
 
     @Volatile
     var isRunning: Boolean = false
@@ -51,6 +53,8 @@ class ProxyEngine {
         if (isRunning) return
         AppLogger.setEnabled(config.loggingEnabled)
         AppLogger.setVerbose(config.verbose)
+        allowIpv6 = config.allowIpv6
+        ipv6BlockedUntilMs = 0L
         dcOpt = parseDcIpList(config.dcIp)
 
         scope.launch { runServer(config.host, config.port) }
@@ -173,6 +177,13 @@ class ProxyEngine {
             }
 
             if (dst.contains(":")) {
+                if (!allowIpv6) {
+                    AppLogger.d("Proxy", "[$label] IPv6 disabled by config -> reject")
+                    output.write(socks5Reply(0x04))
+                    output.flush()
+                    socket.close()
+                    return@withContext
+                }
                 val now = SystemClock.elapsedRealtime()
                 if (now < ipv6BlockedUntilMs) {
                     val remaining = (ipv6BlockedUntilMs - now) / 1000
@@ -489,6 +500,7 @@ class ProxyEngine {
         val port = ((data[idx].toInt() and 0xFF) shl 8) or (data[idx + 1].toInt() and 0xFF)
         idx += 2
         if (data.size < idx) return null
+        if (!allowIpv6 && address.address.size == 16) return null
         val payload = data.copyOfRange(idx, data.size)
         return InetSocketAddress(address, port) to payload
     }

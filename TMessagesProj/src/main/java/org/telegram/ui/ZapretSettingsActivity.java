@@ -48,6 +48,7 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
     private int generalHeaderRow;
     private int enabledRow;
     private int wsProxyRow;
+    private int wsProxyIpv6Row;
     private int strategyRow;
     private int callCompatibilityRow;
     private int runtimeRow;
@@ -85,6 +86,7 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
         generalHeaderRow = rowCount++;
         enabledRow = rowCount++;
         wsProxyRow = rowCount++;
+        wsProxyIpv6Row = rowCount++;
         strategyRow = rowCount++;
         callCompatibilityRow = rowCount++;
         runtimeRow = rowCount++;
@@ -137,6 +139,8 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
                 ZapretConfig.setEnabled(!ZapretConfig.isEnabled());
             } else if (position == wsProxyRow) {
                 ZapretConfig.setWsProxyEnabled(!ZapretConfig.isWsProxyEnabled());
+            } else if (position == wsProxyIpv6Row) {
+                ZapretConfig.setWsProxyIpv6Enabled(!ZapretConfig.isWsProxyIpv6Enabled());
             } else if (position == callCompatibilityRow) {
                 ZapretConfig.setCallCompatibilityModeEnabled(!ZapretConfig.isCallCompatibilityModeEnabled());
             } else if (position == strategyRow) {
@@ -284,6 +288,7 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
             int position = holder.getAdapterPosition();
             return position == enabledRow
                 || position == wsProxyRow
+                || position == wsProxyIpv6Row
                 || position == callCompatibilityRow
                 || position == strategyRow
                 || position == previewRow
@@ -302,7 +307,7 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
                 return 0;
             } else if (position == generalHeaderRow || position == testsHeaderRow || position == linksHeaderRow) {
                 return 2;
-            } else if (position == enabledRow || position == wsProxyRow || position == callCompatibilityRow) {
+            } else if (position == enabledRow || position == wsProxyRow || position == wsProxyIpv6Row || position == callCompatibilityRow) {
                 return 3;
             } else if (position == infoRow) {
                 return 4;
@@ -391,6 +396,8 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
                         checkCell.setTextAndCheck(LocaleController.getString(R.string.ZapretEnabled), ZapretConfig.isEnabled(), true);
                     } else if (position == wsProxyRow) {
                         checkCell.setTextAndCheck(LocaleController.getString(R.string.ZapretWsProxy), ZapretConfig.isWsProxyEnabled(), true);
+                    } else if (position == wsProxyIpv6Row) {
+                        checkCell.setTextAndCheck(LocaleController.getString(R.string.ZapretWsProxyIpv6), ZapretConfig.isWsProxyIpv6Enabled(), true);
                     } else if (position == callCompatibilityRow) {
                         checkCell.setTextAndCheck(LocaleController.getString(R.string.ZapretCallCompatibility), ZapretConfig.isCallCompatibilityModeEnabled(), true);
                     }
@@ -414,6 +421,8 @@ public class ZapretSettingsActivity extends BaseFragment implements Notification
                     cell.setChecked(ZapretConfig.isEnabled());
                 } else if (position == wsProxyRow) {
                     cell.setChecked(ZapretConfig.isWsProxyEnabled());
+                } else if (position == wsProxyIpv6Row) {
+                    cell.setChecked(ZapretConfig.isWsProxyIpv6Enabled());
                 } else if (position == callCompatibilityRow) {
                     cell.setChecked(ZapretConfig.isCallCompatibilityModeEnabled());
                 }
