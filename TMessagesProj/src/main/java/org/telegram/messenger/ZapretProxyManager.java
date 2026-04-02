@@ -25,8 +25,7 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
     private static final String KEY_MANAGED_PROXY_USER = "zapret_managed_proxy_user";
     private static final String KEY_MANAGED_PROXY_PASS = "zapret_managed_proxy_pass";
     private static final long CALL_SCOPE_PREPARE_TIMEOUT_MS = 30_000L;
-    private static final long STUCK_PROXY_RELOAD_TIMEOUT_MS = 2_000L;
-    private static final long STUCK_PROXY_RESUME_GRACE_MS = 5_000L;
+    private static final long STUCK_PROXY_RELOAD_TIMEOUT_MS = 4_000L;
 
     private static final ZapretProxyManager INSTANCE = new ZapretProxyManager();
 
@@ -34,6 +33,9 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
     private boolean syncing;
     private boolean proxyReloadScheduled;
     private long callScopePreparedUntilRealtime;
+    private long appBackgroundEnteredAtRealtime;
+    private long appResumedAtRealtime;
+    private long connectingStateSinceRealtime;
 
     private final Runnable clearCallScopePreparationRunnable = () -> {
         if (VoIPService.getSharedInstance() != null) {
@@ -75,6 +77,7 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
             NotificationCenter.getInstance(i).addObserver(this, NotificationCenter.voipServiceCreated);
             NotificationCenter.getInstance(i).addObserver(this, NotificationCenter.didUpdateConnectionState);
         }
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.stopAllHeavyOperations);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.startAllHeavyOperations);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.zapretSettingsChanged);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.proxySettingsChanged);
@@ -92,6 +95,14 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
         if (id == NotificationCenter.didUpdateConnectionState) {
             if (account == UserConfig.selectedAccount) {
                 reevaluateStuckProxyReload(account);
+            }
+            return;
+        }
+        if (id == NotificationCenter.stopAllHeavyOperations) {
+            if (args.length > 0 && args[0] instanceof Integer && ((Integer) args[0]) == 4096) {
+                appBackgroundEnteredAtRealtime = SystemClock.elapsedRealtime();
+                appResumedAtRealtime = 0;
+                cancelStuckProxyReload();
             }
             return;
         }
@@ -332,6 +343,10 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
 
     private void handleAppResume() {
         runOnUiThread(() -> {
+            if (appBackgroundEnteredAtRealtime != 0) {
+                appBackgroundEnteredAtRealtime = 0;
+            }
+            appResumedAtRealtime = SystemClock.elapsedRealtime();
             if (!shouldManageProxy() || ApplicationLoader.mainInterfacePaused) {
                 cancelStuckProxyReload();
                 return;
@@ -354,11 +369,15 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
             cancelStuckProxyReload();
             return;
         }
+        scheduleStuckProxyReload(reloadDelay);
+    }
+
+    private void scheduleStuckProxyReload(long delayMs) {
         if (proxyReloadScheduled) {
             AndroidUtilities.cancelRunOnUIThread(reloadStuckProxyRunnable);
         }
         proxyReloadScheduled = true;
-        AndroidUtilities.runOnUIThread(reloadStuckProxyRunnable, reloadDelay);
+        AndroidUtilities.runOnUIThread(reloadStuckProxyRunnable, Math.max(0L, delayMs));
     }
 
     private void cancelStuckProxyReload() {
@@ -369,29 +388,39 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
         AndroidUtilities.cancelRunOnUIThread(reloadStuckProxyRunnable);
     }
 
+    private boolean isRetryableProxyState(int state) {
+        return state == ConnectionsManager.ConnectionStateConnecting
+            || state == ConnectionsManager.ConnectionStateConnectingToProxy
+            || state == ConnectionsManager.ConnectionStateUpdating;
+    }
+
     private long getStuckProxyReloadDelay(int account) {
         if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT || account != UserConfig.selectedAccount) {
             return -1L;
         }
         if (!shouldManageProxy() || ApplicationLoader.mainInterfacePaused || ApplicationLoader.mainInterfacePausedStageQueue) {
+            connectingStateSinceRealtime = 0;
             return -1L;
         }
         ConnectionsManager manager = ConnectionsManager.getInstance(account);
         if (manager.getPauseTime() != 0) {
+            connectingStateSinceRealtime = 0;
             return -1L;
-        }
-        long resumeTime = ApplicationLoader.mainInterfacePausedStageQueueTime;
-        if (resumeTime > 0) {
-            long elapsedSinceResume = System.currentTimeMillis() - resumeTime;
-            if (elapsedSinceResume < STUCK_PROXY_RESUME_GRACE_MS) {
-                return Math.max(STUCK_PROXY_RELOAD_TIMEOUT_MS, STUCK_PROXY_RESUME_GRACE_MS - elapsedSinceResume + STUCK_PROXY_RELOAD_TIMEOUT_MS);
-            }
         }
         int state = manager.getConnectionState();
-        if (state != ConnectionsManager.ConnectionStateConnecting && state != ConnectionsManager.ConnectionStateConnectingToProxy) {
+        if (!isRetryableProxyState(state)) {
+            connectingStateSinceRealtime = 0;
             return -1L;
         }
-        return STUCK_PROXY_RELOAD_TIMEOUT_MS;
+        long now = SystemClock.elapsedRealtime();
+        if (connectingStateSinceRealtime == 0) {
+            connectingStateSinceRealtime = now;
+        }
+        long reloadAt = connectingStateSinceRealtime + STUCK_PROXY_RELOAD_TIMEOUT_MS;
+        if (appResumedAtRealtime != 0) {
+            reloadAt = Math.max(reloadAt, appResumedAtRealtime + STUCK_PROXY_RELOAD_TIMEOUT_MS);
+        }
+        return Math.max(0L, reloadAt - now);
     }
 
     private String getStuckProxyReloadReason(int account) {
@@ -405,12 +434,8 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
         if (manager.getPauseTime() != 0) {
             return null;
         }
-        long resumeTime = ApplicationLoader.mainInterfacePausedStageQueueTime;
-        if (resumeTime > 0 && System.currentTimeMillis() - resumeTime < STUCK_PROXY_RESUME_GRACE_MS) {
-            return null;
-        }
         int state = manager.getConnectionState();
-        if (state != ConnectionsManager.ConnectionStateConnecting && state != ConnectionsManager.ConnectionStateConnectingToProxy) {
+        if (!isRetryableProxyState(state)) {
             return null;
         }
         return "network:" + ZapretDiagnosticsController.getConnectionStateLabel(state);
@@ -419,10 +444,13 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
     private void forceReloadProxyStack(String reason) {
         runOnUiThread(() -> {
             if (syncing) {
+                scheduleStuckProxyReload(STUCK_PROXY_RELOAD_TIMEOUT_MS);
                 return;
             }
             syncing = true;
             cancelStuckProxyReload();
+            connectingStateSinceRealtime = 0;
+            appResumedAtRealtime = 0;
             try {
                 if (!shouldManageProxy()) {
                     return;
