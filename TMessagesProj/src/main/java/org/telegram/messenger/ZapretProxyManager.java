@@ -24,6 +24,8 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
     private static final String KEY_MANAGED_PROXY_PORT = "zapret_managed_proxy_port";
     private static final String KEY_MANAGED_PROXY_USER = "zapret_managed_proxy_user";
     private static final String KEY_MANAGED_PROXY_PASS = "zapret_managed_proxy_pass";
+    private static final long APP_RESUME_PROXY_RECOVERY_DELAY_MS = 250L;
+    private static final long APP_RESUME_PROXY_RECOVERY_TIMEOUT_MS = 5_000L;
     private static final long CALL_SCOPE_PREPARE_TIMEOUT_MS = 30_000L;
     private static final long STUCK_PROXY_RELOAD_TIMEOUT_MS = 4_000L;
 
@@ -32,6 +34,7 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
     private boolean initialized;
     private boolean syncing;
     private boolean proxyReloadScheduled;
+    private boolean appResumeRecoveryScheduled;
     private long callScopePreparedUntilRealtime;
     private long appBackgroundEnteredAtRealtime;
     private long appResumedAtRealtime;
@@ -53,6 +56,10 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
             return;
         }
         forceReloadProxyStack(reason);
+    };
+    private final Runnable recoverProxyAfterAppResumeRunnable = () -> {
+        appResumeRecoveryScheduled = false;
+        recoverProxyAfterAppResume();
     };
 
     public static void init() {
@@ -102,6 +109,7 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
             if (args.length > 0 && args[0] instanceof Integer && ((Integer) args[0]) == 4096) {
                 appBackgroundEnteredAtRealtime = SystemClock.elapsedRealtime();
                 appResumedAtRealtime = 0;
+                cancelAppResumeRecovery();
                 cancelStuckProxyReload();
             }
             return;
@@ -347,20 +355,55 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
                 appBackgroundEnteredAtRealtime = 0;
             }
             appResumedAtRealtime = SystemClock.elapsedRealtime();
-            if (!shouldManageProxy() || ApplicationLoader.mainInterfacePaused) {
-                cancelStuckProxyReload();
-                return;
-            }
-            if (ZapretConfig.shouldUseLocalWsProxy()) {
-                ZapretWsProxyManager.getInstance().ensureStarted();
-            }
-            if (!isManagedProxyActive()) {
-                syncProxyStateInternal();
-                return;
-            }
-            pokeConnections();
-            reevaluateStuckProxyReload(UserConfig.selectedAccount);
+            cancelAppResumeRecovery();
+            recoverProxyAfterAppResume();
         });
+    }
+
+    private void recoverProxyAfterAppResume() {
+        if (!shouldManageProxy()) {
+            cancelAppResumeRecovery();
+            cancelStuckProxyReload();
+            return;
+        }
+        if (ApplicationLoader.mainInterfacePaused || ApplicationLoader.mainInterfacePausedStageQueue) {
+            scheduleAppResumeRecovery();
+            return;
+        }
+        cancelAppResumeRecovery();
+        if (ZapretConfig.shouldUseLocalWsProxy()) {
+            ZapretWsProxyManager.getInstance().ensureStarted();
+        }
+        if (!isManagedProxyActive()) {
+            syncProxyStateInternal();
+            return;
+        }
+        pokeConnections();
+        reevaluateStuckProxyReload(UserConfig.selectedAccount);
+    }
+
+    private void scheduleAppResumeRecovery() {
+        if (appResumedAtRealtime == 0) {
+            return;
+        }
+        if (SystemClock.elapsedRealtime() - appResumedAtRealtime > APP_RESUME_PROXY_RECOVERY_TIMEOUT_MS) {
+            cancelAppResumeRecovery();
+            cancelStuckProxyReload();
+            return;
+        }
+        if (appResumeRecoveryScheduled) {
+            AndroidUtilities.cancelRunOnUIThread(recoverProxyAfterAppResumeRunnable);
+        }
+        appResumeRecoveryScheduled = true;
+        AndroidUtilities.runOnUIThread(recoverProxyAfterAppResumeRunnable, APP_RESUME_PROXY_RECOVERY_DELAY_MS);
+    }
+
+    private void cancelAppResumeRecovery() {
+        if (!appResumeRecoveryScheduled) {
+            return;
+        }
+        appResumeRecoveryScheduled = false;
+        AndroidUtilities.cancelRunOnUIThread(recoverProxyAfterAppResumeRunnable);
     }
 
     private void reevaluateStuckProxyReload(int account) {
