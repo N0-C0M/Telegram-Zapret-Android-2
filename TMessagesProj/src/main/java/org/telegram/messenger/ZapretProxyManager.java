@@ -75,6 +75,7 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
             NotificationCenter.getInstance(i).addObserver(this, NotificationCenter.voipServiceCreated);
             NotificationCenter.getInstance(i).addObserver(this, NotificationCenter.didUpdateConnectionState);
         }
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.startAllHeavyOperations);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.zapretSettingsChanged);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.proxySettingsChanged);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.didStartedCall);
@@ -91,6 +92,12 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
         if (id == NotificationCenter.didUpdateConnectionState) {
             if (account == UserConfig.selectedAccount) {
                 reevaluateStuckProxyReload(account);
+            }
+            return;
+        }
+        if (id == NotificationCenter.startAllHeavyOperations) {
+            if (args.length > 0 && args[0] instanceof Integer && ((Integer) args[0]) == 4096) {
+                handleAppResume();
             }
             return;
         }
@@ -321,6 +328,24 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
     private void clearCallScopePreparation() {
         callScopePreparedUntilRealtime = 0;
         AndroidUtilities.cancelRunOnUIThread(clearCallScopePreparationRunnable);
+    }
+
+    private void handleAppResume() {
+        runOnUiThread(() -> {
+            if (!shouldManageProxy() || ApplicationLoader.mainInterfacePaused) {
+                cancelStuckProxyReload();
+                return;
+            }
+            if (ZapretConfig.shouldUseLocalWsProxy()) {
+                ZapretWsProxyManager.getInstance().ensureStarted();
+            }
+            if (!isManagedProxyActive()) {
+                syncProxyStateInternal();
+                return;
+            }
+            pokeConnections();
+            reevaluateStuckProxyReload(UserConfig.selectedAccount);
+        });
     }
 
     private void reevaluateStuckProxyReload(int account) {
