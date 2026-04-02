@@ -6840,6 +6840,9 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                             });
                         }
                     }
+                    if (!isSentError && totalSent[0] > 0) {
+                        maybeTriggerGhostModeOfflineAfterSend(scheduled);
+                    }
                     Utilities.stageQueue.postRunnable(() -> getMessagesController().processUpdates(updates, false));
                 } else {
                     AlertsCreator.processError(currentAccount, error, null, request);
@@ -6864,6 +6867,13 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 }
             });
         }, null, ConnectionsManager.RequestFlagCanCompress | ConnectionsManager.RequestFlagInvokeAfter);
+    }
+
+    private void maybeTriggerGhostModeOfflineAfterSend(boolean scheduled) {
+        if (scheduled || !ZapretConfig.isGhostModeEnabled()) {
+            return;
+        }
+        getMessagesController().triggerGhostModeOfflineAfterSend();
     }
 
     private void performSendMessageRequest(final TLObject req, final MessageObject msgObj, final String originalPath, DelayedMessage delayedMessage, Object parentObject, HashMap<String, String> params, boolean scheduled) {
@@ -7190,6 +7200,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                             newMsgObj.send_state = MessageObject.MESSAGE_SEND_STATE_SENT;
                             newMsgObj.errorNewPriceStars = 0;
                             newMsgObj.errorAllowedPriceStars = 0;
+                            maybeTriggerGhostModeOfflineAfterSend(scheduled);
                             if (scheduled != currentSchedule) {
                                 final boolean finalCurrentSchedule = currentSchedule;
                                 ArrayList<Integer> messageIds = new ArrayList<>();

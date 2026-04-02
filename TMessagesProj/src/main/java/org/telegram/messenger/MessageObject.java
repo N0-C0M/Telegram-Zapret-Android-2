@@ -1850,6 +1850,7 @@ public class MessageObject {
 
         currentAccount = accountNum;
         messageOwner = message;
+        deletedByPeer = MessagesController.getInstance(currentAccount).isSoftDeletedMessage(messageOwner);
         replyMessageObject = replyToMessage;
         eventId = eid;
         wasUnread = !messageOwner.out && messageOwner.unread;

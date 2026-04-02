@@ -114,6 +114,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -124,6 +125,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MessagesController extends BaseController implements NotificationCenter.NotificationCenterDelegate {
+    private static final String ZAPRET_SOFT_DELETED_PREF_PREFIX = "zapret_soft_deleted_";
+    private static final int ZAPRET_SOFT_DELETED_IDS_LIMIT = 512;
+    private static final long ZAPRET_GHOST_OFFLINE_COOLDOWN_MS = 5000L;
 
     public int lastKnownSessionsCount;
     private final ConcurrentHashMap<Long, TLRPC.Chat> chats = new ConcurrentHashMap<>(100, 1.0f, 2);
@@ -383,7 +387,10 @@ public class MessagesController extends BaseController implements NotificationCe
     private int statusRequest;
     private int statusSettingState;
     private boolean offlineSent;
+    private Runnable ghostModeOnlineRestoreRunnable;
     private String uploadingAvatar;
+    private final Object softDeletedMessagesLock = new Object();
+    private final LongSparseArray<LinkedHashSet<Integer>> softDeletedMessages = new LongSparseArray<>();
 
     private HashMap<String, Object> uploadingThemes = new HashMap<>();
 
@@ -1436,6 +1443,145 @@ public class MessagesController extends BaseController implements NotificationCe
 
     public static SharedPreferences getGlobalMainSettings() {
         return getInstance(0).mainPreferences;
+    }
+
+    private String getSoftDeletedMessagesKey(long scopeId) {
+        return ZAPRET_SOFT_DELETED_PREF_PREFIX + scopeId;
+    }
+
+    private long getSoftDeletedMessagesScope(TLRPC.Message message) {
+        if (message == null || message.peer_id == null || message.peer_id.channel_id == 0) {
+            return 0L;
+        }
+        return MessageObject.getDialogId(message);
+    }
+
+    private LinkedHashSet<Integer> getSoftDeletedMessagesForScopeLocked(long scopeId) {
+        LinkedHashSet<Integer> cachedIds = softDeletedMessages.get(scopeId);
+        if (cachedIds != null) {
+            return cachedIds;
+        }
+        cachedIds = new LinkedHashSet<>();
+        String serializedIds = mainPreferences.getString(getSoftDeletedMessagesKey(scopeId), null);
+        if (!TextUtils.isEmpty(serializedIds)) {
+            String[] parts = serializedIds.split(",");
+            for (int i = 0; i < parts.length; i++) {
+                String part = parts[i];
+                if (TextUtils.isEmpty(part)) {
+                    continue;
+                }
+                try {
+                    int id = Integer.parseInt(part);
+                    if (id != 0) {
+                        cachedIds.add(id);
+                    }
+                } catch (Exception ignore) {
+                }
+            }
+        }
+        softDeletedMessages.put(scopeId, cachedIds);
+        return cachedIds;
+    }
+
+    private void saveSoftDeletedMessagesForScopeLocked(long scopeId, LinkedHashSet<Integer> ids) {
+        String key = getSoftDeletedMessagesKey(scopeId);
+        if (ids == null || ids.isEmpty()) {
+            mainPreferences.edit().remove(key).apply();
+            return;
+        }
+        StringBuilder builder = new StringBuilder(ids.size() * 8);
+        Iterator<Integer> iterator = ids.iterator();
+        while (iterator.hasNext()) {
+            Integer id = iterator.next();
+            if (id == null || id == 0) {
+                continue;
+            }
+            if (builder.length() > 0) {
+                builder.append(',');
+            }
+            builder.append(id);
+        }
+        if (builder.length() == 0) {
+            mainPreferences.edit().remove(key).apply();
+        } else {
+            mainPreferences.edit().putString(key, builder.toString()).apply();
+        }
+    }
+
+    private void rememberSoftDeletedMessages(long scopeId, ArrayList<Integer> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        synchronized (softDeletedMessagesLock) {
+            LinkedHashSet<Integer> cachedIds = getSoftDeletedMessagesForScopeLocked(scopeId);
+            boolean changed = false;
+            for (int i = 0, size = ids.size(); i < size; i++) {
+                Integer messageId = ids.get(i);
+                if (messageId == null || messageId == 0) {
+                    continue;
+                }
+                if (cachedIds.remove(messageId)) {
+                    changed = true;
+                }
+                if (cachedIds.add(messageId)) {
+                    changed = true;
+                }
+            }
+            while (cachedIds.size() > ZAPRET_SOFT_DELETED_IDS_LIMIT) {
+                Iterator<Integer> iterator = cachedIds.iterator();
+                if (!iterator.hasNext()) {
+                    break;
+                }
+                iterator.next();
+                iterator.remove();
+                changed = true;
+            }
+            if (changed) {
+                saveSoftDeletedMessagesForScopeLocked(scopeId, cachedIds);
+            }
+        }
+    }
+
+    public boolean isSoftDeletedMessage(TLRPC.Message message) {
+        if (!ZapretConfig.isReadDeletedMessagesEnabled() || message == null || message.id == 0) {
+            return false;
+        }
+        synchronized (softDeletedMessagesLock) {
+            return getSoftDeletedMessagesForScopeLocked(getSoftDeletedMessagesScope(message)).contains(message.id);
+        }
+    }
+
+    public void triggerGhostModeOfflineAfterSend() {
+        if (!ZapretConfig.isGhostModeEnabled() || !getUserConfig().isClientActivated()) {
+            return;
+        }
+        AndroidUtilities.runOnUIThread(() -> {
+            ignoreSetOnline = true;
+            if (ghostModeOnlineRestoreRunnable != null) {
+                AndroidUtilities.cancelRunOnUIThread(ghostModeOnlineRestoreRunnable);
+            }
+            ghostModeOnlineRestoreRunnable = () -> {
+                ignoreSetOnline = false;
+                ghostModeOnlineRestoreRunnable = null;
+            };
+            AndroidUtilities.runOnUIThread(ghostModeOnlineRestoreRunnable, ZAPRET_GHOST_OFFLINE_COOLDOWN_MS);
+
+            statusSettingState = 2;
+            if (statusRequest != 0) {
+                getConnectionsManager().cancelRequest(statusRequest, true);
+            }
+
+            TL_account.updateStatus req = new TL_account.updateStatus();
+            req.offline = true;
+            statusRequest = getConnectionsManager().sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+                if (error == null) {
+                    offlineSent = true;
+                } else if (lastStatusUpdateTime != 0) {
+                    lastStatusUpdateTime += 5000;
+                }
+                statusRequest = 0;
+            }));
+        });
     }
 
     public static SharedPreferences getEmojiSettings(int account) {
@@ -6431,6 +6577,10 @@ public class MessagesController extends BaseController implements NotificationCe
         resetingDialogs = false;
         lastStatusUpdateTime = 0;
         offlineSent = false;
+        if (ghostModeOnlineRestoreRunnable != null) {
+            AndroidUtilities.cancelRunOnUIThread(ghostModeOnlineRestoreRunnable);
+            ghostModeOnlineRestoreRunnable = null;
+        }
         registeringForPush = false;
         getDifferenceFirstSync = true;
         uploadingAvatar = null;
@@ -6440,6 +6590,9 @@ public class MessagesController extends BaseController implements NotificationCe
         gettingChatInviters.clear();
         statusRequest = 0;
         statusSettingState = 0;
+        synchronized (softDeletedMessagesLock) {
+            softDeletedMessages.clear();
+        }
 
         Utilities.stageQueue.postRunnable(() -> {
             FileLog.d("cleanup: isUpdating = false");
@@ -10858,6 +11011,7 @@ public class MessagesController extends BaseController implements NotificationCe
                 if (messageIds == null || messageIds.isEmpty()) {
                     continue;
                 }
+                rememberSoftDeletedMessages(dialogId, messageIds);
                 if (dialogId == 0) {
                     for (int b = 0, count = messageIds.size(); b < count; b++) {
                         MessageObject obj = dialogMessagesByIds.get(messageIds.get(b));
@@ -16559,6 +16713,7 @@ public class MessagesController extends BaseController implements NotificationCe
 
     protected void deleteMessagesByPush(long dialogId, ArrayList<Integer> ids, long channelId) {
         if (ZapretConfig.isReadDeletedMessagesEnabled()) {
+            rememberSoftDeletedMessages(channelId == 0 ? 0L : -channelId, ids);
             AndroidUtilities.runOnUIThread(() -> {
                 if (channelId == 0) {
                     for (int b = 0, size2 = ids.size(); b < size2; b++) {
