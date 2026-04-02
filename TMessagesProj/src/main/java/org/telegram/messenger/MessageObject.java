@@ -201,6 +201,7 @@ public class MessageObject {
     public int dateKeyInt;
     public String monthKey;
     public boolean deleted;
+    public boolean deletedByPeer;
     public boolean deletedByThanos;
     public float audioProgress;
     public float forceSeekTo = -1;

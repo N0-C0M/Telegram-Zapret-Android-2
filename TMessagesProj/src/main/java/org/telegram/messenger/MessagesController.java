@@ -2214,6 +2214,7 @@ public class MessagesController extends BaseController implements NotificationCe
                                                     MessageObject oldMsg = oldMsgs.get(j);
                                                     if (oldMsg != null && oldMsg.getId() == newMsg.getId()) {
                                                         newMsg.deleted = oldMsg.deleted;
+                                                        newMsg.deletedByPeer = oldMsg.deletedByPeer;
                                                         break;
                                                     }
                                                 }
@@ -2252,6 +2253,7 @@ public class MessagesController extends BaseController implements NotificationCe
                                                 MessageObject oldMsg = oldMsgs.get(j);
                                                 if (oldMsg != null && oldMsg.getId() == newMsg.getId()) {
                                                     newMsg.deleted = oldMsg.deleted;
+                                                    newMsg.deletedByPeer = oldMsg.deletedByPeer;
                                                     break;
                                                 }
                                             }
@@ -10841,9 +10843,54 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     private LongSparseArray<ArrayList<Integer>> maybeSuppressDeletedMessages(LongSparseArray<ArrayList<Integer>> deletedMessages) {
-        if (!ZapretConfig.isReadDeletedMessagesEnabled()) {
+        if (!ZapretConfig.isReadDeletedMessagesEnabled() || deletedMessages == null || deletedMessages.size() == 0) {
             return deletedMessages;
         }
+        LongSparseArray<ArrayList<Integer>> deletedMessagesFinal = deletedMessages;
+        AndroidUtilities.runOnUIThread(() -> {
+            boolean updated = false;
+            for (int a = 0, size = deletedMessagesFinal.size(); a < size; a++) {
+                long dialogId = deletedMessagesFinal.keyAt(a);
+                ArrayList<Integer> messageIds = deletedMessagesFinal.valueAt(a);
+                if (messageIds == null || messageIds.isEmpty()) {
+                    continue;
+                }
+                if (dialogId == 0) {
+                    for (int b = 0, count = messageIds.size(); b < count; b++) {
+                        MessageObject obj = dialogMessagesByIds.get(messageIds.get(b));
+                        if (obj != null) {
+                            obj.deletedByPeer = true;
+                            updated = true;
+                        }
+                    }
+                } else {
+                    ArrayList<MessageObject> objs = dialogMessage.get(dialogId);
+                    if (objs != null) {
+                        for (int i = 0; i < objs.size(); ++i) {
+                            MessageObject obj = objs.get(i);
+                            if (obj == null) {
+                                continue;
+                            }
+                            for (int b = 0, count = messageIds.size(); b < count; b++) {
+                                if (obj.getId() == messageIds.get(b)) {
+                                    obj.deletedByPeer = true;
+                                    updated = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                getNotificationCenter().postNotificationName(
+                    NotificationCenter.messagesDeletedByPeer,
+                    messageIds,
+                    dialogId == 0 ? 0L : -dialogId
+                );
+            }
+            if (updated) {
+                getNotificationCenter().postNotificationName(NotificationCenter.updateInterfaces, UPDATE_MASK_AVATAR);
+            }
+        });
         return null;
     }
 
@@ -12923,6 +12970,7 @@ public class MessagesController extends BaseController implements NotificationCe
                                                 MessageObject oldMsg = oldMsgs.get(j);
                                                 if (oldMsg != null && oldMsg.getId() == newMsg.getId()) {
                                                     newMsg.deleted = oldMsg.deleted;
+                                                    newMsg.deletedByPeer = oldMsg.deletedByPeer;
                                                     break;
                                                 }
                                             }
@@ -12963,6 +13011,7 @@ public class MessagesController extends BaseController implements NotificationCe
                                             MessageObject oldMsg = oldMsgs.get(j);
                                             if (oldMsg != null && oldMsg.getId() == newMsg.getId()) {
                                                 newMsg.deleted = oldMsg.deleted;
+                                                newMsg.deletedByPeer = oldMsg.deletedByPeer;
                                                 break;
                                             }
                                         }
@@ -13484,6 +13533,7 @@ public class MessagesController extends BaseController implements NotificationCe
                                             MessageObject oldMsg = oldMsgs.get(j);
                                             if (oldMsg != null && oldMsg.getId() == newMsg.getId()) {
                                                 newMsg.deleted = oldMsg.deleted;
+                                                newMsg.deletedByPeer = oldMsg.deletedByPeer;
                                                 break;
                                             }
                                         }
@@ -13525,6 +13575,7 @@ public class MessagesController extends BaseController implements NotificationCe
                                             MessageObject oldMsg = oldMsgs.get(j);
                                             if (oldMsg != null && oldMsg.getId() == newMsg.getId()) {
                                                 newMsg.deleted = oldMsg.deleted;
+                                                newMsg.deletedByPeer = oldMsg.deletedByPeer;
                                                 break;
                                             }
                                         }
@@ -16493,6 +16544,32 @@ public class MessagesController extends BaseController implements NotificationCe
 
     protected void deleteMessagesByPush(long dialogId, ArrayList<Integer> ids, long channelId) {
         if (ZapretConfig.isReadDeletedMessagesEnabled()) {
+            AndroidUtilities.runOnUIThread(() -> {
+                if (channelId == 0) {
+                    for (int b = 0, size2 = ids.size(); b < size2; b++) {
+                        Integer id = ids.get(b);
+                        MessageObject obj = dialogMessagesByIds.get(id);
+                        if (obj != null) {
+                            obj.deletedByPeer = true;
+                        }
+                    }
+                } else {
+                    ArrayList<MessageObject> objs = dialogMessage.get(-channelId);
+                    if (objs != null) {
+                        for (int i = 0; i < objs.size(); ++i) {
+                            MessageObject obj = objs.get(i);
+                            for (int b = 0, size2 = ids.size(); b < size2; b++) {
+                                if (obj.getId() == ids.get(b)) {
+                                    obj.deletedByPeer = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                getNotificationCenter().postNotificationName(NotificationCenter.messagesDeletedByPeer, ids, channelId);
+                getNotificationCenter().postNotificationName(NotificationCenter.updateInterfaces, UPDATE_MASK_AVATAR);
+            });
             return;
         }
         getMessagesStorage().getStorageQueue().postRunnable(() -> {

@@ -2697,6 +2697,7 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
         getNotificationCenter().addObserver(this, NotificationCenter.closeChats);
         getNotificationCenter().addObserver(this, NotificationCenter.closeChatActivity);
         getNotificationCenter().addObserver(this, NotificationCenter.messagesDeleted);
+        getNotificationCenter().addObserver(this, NotificationCenter.messagesDeletedByPeer);
         getNotificationCenter().addObserver(this, NotificationCenter.historyCleared);
         getNotificationCenter().addObserver(this, NotificationCenter.messageReceivedByServer);
         getNotificationCenter().addObserver(this, NotificationCenter.messageReceivedByAck);
@@ -3167,6 +3168,7 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
         getNotificationCenter().removeObserver(this, NotificationCenter.commentsRead);
         getNotificationCenter().removeObserver(this, NotificationCenter.changeRepliesCounter);
         getNotificationCenter().removeObserver(this, NotificationCenter.messagesDeleted);
+        getNotificationCenter().removeObserver(this, NotificationCenter.messagesDeletedByPeer);
         getNotificationCenter().removeObserver(this, NotificationCenter.historyCleared);
         getNotificationCenter().removeObserver(this, NotificationCenter.messageReceivedByServer);
         getNotificationCenter().removeObserver(this, NotificationCenter.messageReceivedByAck);
@@ -22121,6 +22123,10 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
             if (updated && chatAdapter != null) {
                 chatAdapter.notifyDataSetChanged(false);
             }
+        } else if (id == NotificationCenter.messagesDeletedByPeer) {
+            ArrayList<Integer> markAsDeletedMessages = (ArrayList<Integer>) args[0];
+            long channelId = (Long) args[1];
+            processSoftDeletedMessages(markAsDeletedMessages, channelId);
         } else if (id == NotificationCenter.messagesDeleted) {
             boolean scheduled = (Boolean) args[2];
             if (scheduled != (chatMode == MODE_SCHEDULED)) {
@@ -25742,6 +25748,41 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
             sponsoredMessagesCount++;
         }
         return sponsoredMessagesCount;
+    }
+
+    private void processSoftDeletedMessages(ArrayList<Integer> messageIds, long channelId) {
+        if (messageIds == null || messageIds.isEmpty() || chatMode == MODE_SCHEDULED) {
+            return;
+        }
+        int loadIndex = 0;
+        if (ChatObject.isChannel(currentChat)) {
+            if (channelId == 0 && mergeDialogId != 0) {
+                loadIndex = 1;
+            } else if (channelId == -dialog_id) {
+                loadIndex = 0;
+            } else {
+                return;
+            }
+        } else if (channelId != 0) {
+            return;
+        }
+
+        boolean updated = false;
+        for (int i = 0, size = messageIds.size(); i < size; i++) {
+            Integer mid = messageIds.get(i);
+            MessageObject obj = chatAdapter != null && chatAdapter.isFiltered ? filteredMessagesDict.get(mid) : messagesDict[loadIndex].get(mid);
+            if (obj == null || obj.deletedByPeer) {
+                continue;
+            }
+            obj.deletedByPeer = true;
+            updated = true;
+            if (chatAdapter != null) {
+                chatAdapter.invalidateRowWithMessageObject(obj);
+            }
+        }
+        if (updated && chatListView != null) {
+            chatListView.invalidate();
+        }
     }
 
     private void processDeletedMessages(ArrayList<Integer> markAsDeletedMessages, long channelId, boolean sent) {

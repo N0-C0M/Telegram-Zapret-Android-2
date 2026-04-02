@@ -5899,6 +5899,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         if (messageObject.checkLayout() || currentPosition != null && lastHeight != AndroidUtilities.displaySize.y) {
             currentMessageObject = null;
         }
+        applyDeletedByPeerAlpha(messageObject);
         messageObject.isOutOwnerCached = null;
         boolean widthChanged = lastWidth != getParentWidth();
         lastHeight = AndroidUtilities.displaySize.y;
@@ -25587,8 +25588,11 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         return super.getAlpha();
     }
 
-    @Override
-    public void setAlpha(float alpha) {
+    private void applyDeletedByPeerAlpha(MessageObject messageObject) {
+        applyCellAlphaInternal(messageObject != null && messageObject.deletedByPeer ? 0.55f : 1.0f);
+    }
+
+    private void applyCellAlphaInternal(float alpha) {
         if ((alpha == 1f) != (getAlpha() == 1)) {
             invalidate();
         }
@@ -25598,10 +25602,15 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         } else {
             super.setAlpha(alpha);
         }
-        if ((currentPosition == null || currentPosition.minY == 0 && currentPosition.minX == 0) && !(enterTransitionInProgress && !currentMessageObject.isVoice()) && replyNameLayout != null && replyTextLayout != null || // Reply layout
-                (currentPosition == null || ((currentPosition.flags & MessageObject.POSITION_FLAG_BOTTOM) != 0 && (currentPosition.flags & MessageObject.POSITION_FLAG_LEFT) != 0)) && !reactionsLayoutInBubble.isSmall) { // Reactions
+        if (currentMessageObject != null && ((currentPosition == null || currentPosition.minY == 0 && currentPosition.minX == 0) && !(enterTransitionInProgress && !currentMessageObject.isVoice()) && replyNameLayout != null && replyTextLayout != null ||
+                (currentPosition == null || ((currentPosition.flags & MessageObject.POSITION_FLAG_BOTTOM) != 0 && (currentPosition.flags & MessageObject.POSITION_FLAG_LEFT) != 0)) && !reactionsLayoutInBubble.isSmall)) {
             invalidate();
         }
+    }
+
+    @Override
+    public void setAlpha(float alpha) {
+        applyCellAlphaInternal(alpha);
     }
 
     public int getCurrentBackgroundLeft() {

@@ -25,11 +25,13 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
     private static final String KEY_MANAGED_PROXY_USER = "zapret_managed_proxy_user";
     private static final String KEY_MANAGED_PROXY_PASS = "zapret_managed_proxy_pass";
     private static final long CALL_SCOPE_PREPARE_TIMEOUT_MS = 30_000L;
+    private static final long STUCK_PROXY_RELOAD_TIMEOUT_MS = 2_000L;
 
     private static final ZapretProxyManager INSTANCE = new ZapretProxyManager();
 
     private boolean initialized;
     private boolean syncing;
+    private boolean proxyReloadScheduled;
     private long callScopePreparedUntilRealtime;
 
     private final Runnable clearCallScopePreparationRunnable = () -> {
@@ -40,6 +42,14 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
             callScopePreparedUntilRealtime = 0;
             syncProxyState();
         }
+    };
+    private final Runnable reloadStuckProxyRunnable = () -> {
+        proxyReloadScheduled = false;
+        String reason = getStuckProxyReloadReason(UserConfig.selectedAccount);
+        if (reason == null) {
+            return;
+        }
+        forceReloadProxyStack(reason);
     };
 
     public static void init() {
@@ -62,6 +72,7 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
         SharedConfig.loadProxyList();
         for (int i = 0; i < UserConfig.MAX_ACCOUNT_COUNT; i++) {
             NotificationCenter.getInstance(i).addObserver(this, NotificationCenter.voipServiceCreated);
+            NotificationCenter.getInstance(i).addObserver(this, NotificationCenter.didUpdateConnectionState);
         }
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.zapretSettingsChanged);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.proxySettingsChanged);
@@ -74,6 +85,12 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
     public void didReceivedNotification(int id, int account, Object... args) {
         if (id == NotificationCenter.didStartedCall || id == NotificationCenter.voipServiceCreated) {
             prepareForCallRoutingInternal();
+            return;
+        }
+        if (id == NotificationCenter.didUpdateConnectionState) {
+            if (account == UserConfig.selectedAccount) {
+                reevaluateStuckProxyReload(account);
+            }
             return;
         }
         if (id == NotificationCenter.didEndCall) {
@@ -136,6 +153,7 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
         } finally {
             syncing = false;
             NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.zapretDebugStateChanged);
+            reevaluateStuckProxyReload(UserConfig.selectedAccount);
         }
     }
 
@@ -302,6 +320,64 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
     private void clearCallScopePreparation() {
         callScopePreparedUntilRealtime = 0;
         AndroidUtilities.cancelRunOnUIThread(clearCallScopePreparationRunnable);
+    }
+
+    private void reevaluateStuckProxyReload(int account) {
+        if (getStuckProxyReloadReason(account) == null) {
+            cancelStuckProxyReload();
+            return;
+        }
+        if (proxyReloadScheduled) {
+            return;
+        }
+        proxyReloadScheduled = true;
+        AndroidUtilities.runOnUIThread(reloadStuckProxyRunnable, STUCK_PROXY_RELOAD_TIMEOUT_MS);
+    }
+
+    private void cancelStuckProxyReload() {
+        if (!proxyReloadScheduled) {
+            return;
+        }
+        proxyReloadScheduled = false;
+        AndroidUtilities.cancelRunOnUIThread(reloadStuckProxyRunnable);
+    }
+
+    private String getStuckProxyReloadReason(int account) {
+        if (account < 0 || account >= UserConfig.MAX_ACCOUNT_COUNT || account != UserConfig.selectedAccount) {
+            return null;
+        }
+        if (!shouldManageProxy()) {
+            return null;
+        }
+        int state = ConnectionsManager.getInstance(account).getConnectionState();
+        if (state != ConnectionsManager.ConnectionStateConnecting && state != ConnectionsManager.ConnectionStateConnectingToProxy) {
+            return null;
+        }
+        return "network:" + ZapretDiagnosticsController.getConnectionStateLabel(state);
+    }
+
+    private void forceReloadProxyStack(String reason) {
+        runOnUiThread(() -> {
+            if (syncing) {
+                return;
+            }
+            syncing = true;
+            cancelStuckProxyReload();
+            try {
+                ZapretDiagnosticsController.getInstance().logRuntimeEvent("proxy stack reload: " + reason);
+                restorePreviousProxy();
+                ZapretWsProxyManager.getInstance().ensureStopped();
+                if (shouldManageProxy()) {
+                    ZapretWsProxyManager.getInstance().ensureStarted();
+                    applyManagedProxy();
+                }
+                pokeConnections();
+            } finally {
+                syncing = false;
+                NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.zapretDebugStateChanged);
+                reevaluateStuckProxyReload(UserConfig.selectedAccount);
+            }
+        });
     }
 
     private boolean shouldManageProxy() {
