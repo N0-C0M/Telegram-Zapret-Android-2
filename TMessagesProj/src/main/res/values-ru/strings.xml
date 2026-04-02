@@ -276,6 +276,8 @@
     <string name="ZapretWsProxyNotification">Показывать уведомление WS proxy</string>
     <string name="ZapretReadDeletedMessages">Читать удалённые сообщения</string>
     <string name="ZapretReadDeletedMessagesShort">Удалённые сообщения</string>
+    <string name="ZapretGhostMode">Режим призрака</string>
+    <string name="ZapretGhostModeShort">Призрак</string>
     <string name="ZapretWsProxyStandaloneShort">WS proxy</string>
     <string name="ZapretCallCompatibility">Режим совместимости звонков (TCP, без P2P)</string>
     <string name="ZapretConfigurationSource">Источник конфигурации</string>

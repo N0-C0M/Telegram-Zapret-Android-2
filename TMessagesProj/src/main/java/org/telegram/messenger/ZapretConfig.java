@@ -43,6 +43,7 @@ public final class ZapretConfig {
     private static final String KEY_WS_PROXY_IPV6_ENABLED = "zapret_ws_proxy_ipv6_enabled";
     private static final String KEY_WS_PROXY_NOTIFICATION_ENABLED = "zapret_ws_proxy_notification_enabled";
     private static final String KEY_READ_DELETED_MESSAGES_ENABLED = "zapret_read_deleted_messages_enabled";
+    private static final String KEY_GHOST_MODE_ENABLED = "zapret_ghost_mode_enabled";
     private static final String KEY_LOCAL_VPN_ENABLED = "zapret_local_vpn_enabled";
     private static final String KEY_CALL_COMPATIBILITY_MODE = "zapret_call_compat_mode";
 
@@ -292,6 +293,15 @@ public final class ZapretConfig {
         notifyConfigChanged();
     }
 
+    public static boolean isGhostModeEnabled() {
+        return getPreferences().getBoolean(KEY_GHOST_MODE_ENABLED, false);
+    }
+
+    public static void setGhostModeEnabled(boolean enabled) {
+        getPreferences().edit().putBoolean(KEY_GHOST_MODE_ENABLED, enabled).apply();
+        notifyConfigChanged();
+    }
+
     public static boolean hasProxyEndpoint() {
         return !TextUtils.isEmpty(getProxyHost()) && getProxyPort() > 0;
     }
@@ -457,17 +467,23 @@ public final class ZapretConfig {
     }
 
     public static String getSettingsSummary() {
-        if (isWsProxyEnabled() && isReadDeletedMessagesEnabled()) {
-            return LocaleController.getString(R.string.ZapretWsProxyStandaloneShort) + " / " + getProxyEndpointLabel()
-                + " / " + LocaleController.getString(R.string.ZapretReadDeletedMessagesShort);
-        }
+        StringBuilder summary = new StringBuilder();
         if (isWsProxyEnabled()) {
-            return LocaleController.getString(R.string.ZapretWsProxyStandaloneShort) + " / " + getProxyEndpointLabel();
+            summary.append(LocaleController.getString(R.string.ZapretWsProxyStandaloneShort)).append(" / ").append(getProxyEndpointLabel());
         }
         if (isReadDeletedMessagesEnabled()) {
-            return LocaleController.getString(R.string.ZapretReadDeletedMessagesShort);
+            if (summary.length() > 0) {
+                summary.append(" / ");
+            }
+            summary.append(LocaleController.getString(R.string.ZapretReadDeletedMessagesShort));
         }
-        return LocaleController.getString(R.string.ZapretDisabled);
+        if (isGhostModeEnabled()) {
+            if (summary.length() > 0) {
+                summary.append(" / ");
+            }
+            summary.append(LocaleController.getString(R.string.ZapretGhostModeShort));
+        }
+        return summary.length() > 0 ? summary.toString() : LocaleController.getString(R.string.ZapretDisabled);
     }
 
     public static String getInfoText() {

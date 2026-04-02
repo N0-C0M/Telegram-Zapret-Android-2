@@ -364,14 +364,16 @@ public class ZapretProxyManager implements NotificationCenter.NotificationCenter
             syncing = true;
             cancelStuckProxyReload();
             try {
-                ZapretDiagnosticsController.getInstance().logRuntimeEvent("proxy stack reload: " + reason);
-                restorePreviousProxy();
-                ZapretWsProxyManager.getInstance().ensureStopped();
-                if (shouldManageProxy()) {
-                    ZapretWsProxyManager.getInstance().ensureStarted();
-                    applyManagedProxy();
+                if (!shouldManageProxy()) {
+                    return;
                 }
-                pokeConnections();
+                ZapretDiagnosticsController.getInstance().logRuntimeEvent("proxy reconnect: " + reason);
+                if (ZapretConfig.shouldUseLocalWsProxy()) {
+                    ZapretWsProxyManager.getInstance().ensureStopped();
+                    ZapretWsProxyManager.getInstance().ensureStarted();
+                }
+                ConnectionsManager.setProxySettings(false, "", 1080, "", "", "");
+                applyManagedProxy();
             } finally {
                 syncing = false;
                 NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.zapretDebugStateChanged);

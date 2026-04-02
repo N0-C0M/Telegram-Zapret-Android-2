@@ -10725,6 +10725,9 @@ public class MessagesController extends BaseController implements NotificationCe
         if (action < 0 || action >= sendingTypings.length || dialogId == 0) {
             return false;
         }
+        if (ZapretConfig.isGhostModeEnabled()) {
+            return false;
+        }
         final long selfId = UserConfig.getInstance(UserConfig.selectedAccount).getClientUserId();
         if (dialogId == selfId) {
             return false;
@@ -13852,6 +13855,9 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     private void completeReadTask(ReadTask task) {
+        if (ZapretConfig.isGhostModeEnabled()) {
+            return;
+        }
         if (task.replyId != 0 && task.monoForumPeerId == 0) {
             TLRPC.TL_messages_readDiscussion req = new TLRPC.TL_messages_readDiscussion();
             req.msg_id = (int) task.replyId;
@@ -13931,6 +13937,9 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void markDialogAsReadNow(long dialogId, long replyId) {
+        if (ZapretConfig.isGhostModeEnabled()) {
+            return;
+        }
         Utilities.stageQueue.postRunnable(() -> {
             if (replyId != 0) {
                 String key = dialogId + "_" + replyId;
@@ -13954,6 +13963,9 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void markMentionsAsRead(long dialogId, long topicId) {
+        if (ZapretConfig.isGhostModeEnabled()) {
+            return;
+        }
         if (DialogObject.isEncryptedDialog(dialogId) || dialogId == getUserConfig().getClientUserId()) {
             return;
         }
@@ -13968,6 +13980,9 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void markDialogAsRead(long dialogId, int maxPositiveId, int maxNegativeId, int maxDate, boolean popup, long threadId, int countDiff, boolean readNow, int scheduledCount) {
+        if (ZapretConfig.isGhostModeEnabled()) {
+            return;
+        }
         boolean createReadTask;
 
         if (threadId != 0) {
@@ -20168,6 +20183,9 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void markReactionsAsRead(long dialogId, long topicId) {
+        if (ZapretConfig.isGhostModeEnabled()) {
+            return;
+        }
         if (topicId == 0) {
             TLRPC.Dialog dialog = dialogs_dict.get(dialogId);
             if (dialog != null) {
